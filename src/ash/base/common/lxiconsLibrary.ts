@@ -169,6 +169,7 @@ export const lxiconsLibrary = {
 	italics: registerLxicon("italics", 0xe096),
 	kebabVertical: registerLxicon("kebab-vertical", 0xe097),
 	keyboardTab: registerLxicon("keyboard-tab", 0xe098),
+	languageServer: registerLxicon("language-server", 0xe13c),
 	layout: registerLxicon("layout", 0xe0a3),
 	layoutPanel1: registerLxicon("layout-panel-1", 0xe099),
 	layoutPanelOff1: registerLxicon("layout-panel-off-1", 0xe09a),

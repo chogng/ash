@@ -315,7 +315,8 @@
     "diff-changes": "E138",
     "debug-disconnect": "E139",
     "git-branch-changes": "E13A",
-    "git-compare": "E13B"
+    "git-compare": "E13B",
+    "language-server": "E13C"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -483,6 +484,7 @@
     "italics": "21bc1a379f91dab6943cd24086b5e5e8bc9d3944b04b4ebe05117dc685d0cff9",
     "kebab-vertical": "3406c85d1c928683ae6f4140cc891fb24ae9e12cd959f67098b5efee5efdfd4f",
     "keyboard-tab": "de33482d3f27e9f5ee44da3afbc6d375ad2b0039170f10303046bed224f93b6f",
+    "language-server": "93e7940f2a542062b411e96470ec3355f684a034ebf530804ffa42ac55a3a9dd",
     "layout-panel-1": "cf03f884110877fcaf99747daa998dfe6d274a6696e4971ad851142d4bafd46b",
     "layout-panel-off-1": "50ebfa180343e8c268aa33b6e2cba44a207b7d466f8a8fdf2d8dcf991b6bbe59",
     "layout-sidebar-left-1": "abcc02d7dabc22760ff6e3337ee014f119d356e2324c778deb2aae5ba9560c9c",

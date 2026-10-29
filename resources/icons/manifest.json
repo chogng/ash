@@ -827,6 +827,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "language-server",
+      "file": "language-server.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "layout",
       "file": "layout.svg",
       "rendering": "symbolic"
