@@ -97,6 +97,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "beaker",
+      "file": "beaker.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "bell",
       "file": "bell.svg",
       "rendering": "symbolic"

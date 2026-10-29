@@ -316,7 +316,8 @@
     "debug-disconnect": "E139",
     "git-branch-changes": "E13A",
     "git-compare": "E13B",
-    "language-server": "E13C"
+    "language-server": "E13C",
+    "beaker": "E13D"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -338,6 +339,7 @@
     "artifacts": "8ec17a378d3d65c65764e16315b91bcb76139a141a1dccfcbabe23396f962748",
     "ash-mark": "7941c365eb7b3cd3e98435315ef71ba1c8366b45785c89aa238686f9ff449514",
     "ask": "54c423dfc247eb347dda55370f2af31a6d0ffd210825a519255f5731bc5c54ab",
+    "beaker": "928c66fa964d8974a2e1e25047db4031dcdf99a9dab1ae25fad343ed84334366",
     "bell-dot": "b6e467ce1ac38da0374dce31c8f2e3b4bf30b19535b0d5a6473fd250ab88f73f",
     "bell-slash-dot": "a041a4804c2c73def9632a79e4fc703df72502809ab14a34a75a31ae80befc0b",
     "bell-slash": "dab7cfcfd5b7bb0b7b43e0299f5beaf50c7092fdb593a2989099fe52f98e5818",

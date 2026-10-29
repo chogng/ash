@@ -23,6 +23,7 @@ export const lxiconsLibrary = {
 	artifacts: registerLxicon("artifacts", 0xe134),
 	ashMark: registerLxicon("ash-mark", {"fontCharacter":"","layers":[{"id":"petal-north","fontCharacter":"","origin":[0.5,0.2333984375]},{"id":"petal-northwest","fontCharacter":"","origin":[0.30078125,0.33544921875]},{"id":"petal-northeast","fontCharacter":"","origin":[0.6982421875,0.3349609375]},{"id":"petal-west","fontCharacter":"","origin":[0.23193359375,0.50048828125]},{"id":"petal-east","fontCharacter":"","origin":[0.76611328125,0.5]},{"id":"petal-center","fontCharacter":"","origin":[0.49853515625,0.49951171875]},{"id":"petal-southwest","fontCharacter":"","origin":[0.302734375,0.66162109375]},{"id":"petal-southeast","fontCharacter":"","origin":[0.6953125,0.6611328125]},{"id":"petal-south","fontCharacter":"","origin":[0.49951171875,0.7529296875]}]}),
 	ask: registerLxicon("ask", 0xe014),
+	beaker: registerLxicon("beaker", 0xe13d),
 	bell: registerLxicon("bell", 0xe018),
 	bellDot: registerLxicon("bell-dot", 0xe015),
 	bellSlash: registerLxicon("bell-slash", 0xe017),
