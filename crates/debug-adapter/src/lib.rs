@@ -18,6 +18,7 @@ pub use service::DebugAdapterMessage;
 pub use service::DebugAdapterRead;
 pub use service::DebugAdapterService;
 pub use service::DebugAdapterSessionId;
+pub use service::MAX_BUFFERED_MESSAGES;
 
 #[cfg(test)]
 #[path = "framing_tests.rs"]

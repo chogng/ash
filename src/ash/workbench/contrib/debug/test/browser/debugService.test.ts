@@ -2729,6 +2729,35 @@ test('Debug ViewModel publishes coherent session, thread and frame selections wh
 	assert.deepEqual(observed, [['a', 'a-main', 0, true], ['b', 'b-main', 0, false], [undefined, undefined, undefined, false]]);
 });
 
+test('a paused target gains focus and running worker discovery preserves its frame', async () => {
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	const root = URI.file('/workspace');
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	await service.refresh();
+	const parent = await service.startDebugging(service.configurations[1]!);
+	const child = await service.startDebugging(service.configurations[1]!, { parentSession: parent });
+	processes.requestHandler = request => request.command === 'threads' ? { threads: [{ id: 0, name: 'main' }] }
+		: request.command === 'stackTrace' ? { stackFrames: [{ id: 0, name: 'entry', line: 1, column: 1 }] } : {};
+	const focused = new DeferredPromise<void>();
+	resources.add(service.getViewModel().onDidFocusStackFrame(({ stackFrame, session }) => {
+		if (stackFrame && session === parent) void focused.complete();
+	}));
+	processes.event('debug-1', 'stopped', { threadId: 0 });
+	await focused.p;
+	assert.equal(service.session, parent);
+	await service.startDebugging(service.configurations[1]!, { parentSession: parent, lifecycleManagedByParent: true });
+	assert.equal(service.session, parent);
+	assert.equal(service.getViewModel().focusedStackFrame?.id, 0);
+	const selected = new DeferredPromise<void>();
+	resources.add(service.onDidChangeSession(session => { if (session === child && session.state === 'stopped') void selected.complete(); }));
+	processes.event('debug-2', 'stopped', { threadId: 0 });
+	await selected.p;
+	assert.equal(service.session, child);
+});
+
 test('DebugService selects a paused frame without any view and retires automatic focus after resume', async () => {
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();

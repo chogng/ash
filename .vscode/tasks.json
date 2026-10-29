@@ -11,6 +11,65 @@
 			"runOptions": { "instanceLimit": 1 }
 		},
 		{
+			"label": "Prepare Ash Desktop Debug",
+			"dependsOrder": "sequence",
+			"dependsOn": ["Prepare Ash Backend", "Run Ash Desktop Renderer"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Prepare Ash Native Debug",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"Prepare Ash Desktop Debug",
+				"Build Ash Debug Backend"
+			],
+			"problemMatcher": []
+		},
+		{
+			"label": "Build Ash Debug Backend",
+			"type": "shell",
+			"command": "pnpm debug:backend",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Run Ash Desktop Renderer",
+			"type": "shell",
+			"command": "pnpm dev:renderer --port 5183",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "vite",
+				"pattern": {
+					"regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": ".*VITE.*",
+					"endsPattern": "Local:.*http://127\\.0\\.0\\.1:5183/"
+				}
+			},
+			"presentation": {
+				"panel": "dedicated",
+				"group": "ash-desktop-debug"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
 			"label": "Prepare Ash Web",
 			"type": "shell",
 			"command": "pnpm prepare:generated",

@@ -1,6 +1,6 @@
-# MSVC CodeView can expose an aggregate's child with the same type and address.
-# Rust's tuple summary recursively visits that child without detecting the cycle.
-# Bound that traversal while preserving the toolchain's normal field summaries.
+# MSVC CodeView can expose self-referential fields; DWARF graphs such as
+# AppServer can also be prohibitively large. Bound Rust's recursive aggregate
+# summaries while preserving the toolchain's normal field summaries.
 try:
     import lldb_providers as _ash_providers
     import threading as _ash_threading

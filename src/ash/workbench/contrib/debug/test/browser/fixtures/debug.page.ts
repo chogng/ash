@@ -192,7 +192,6 @@ const openedLinks: string[] = [];
 services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async target => { openedLinks.push(target); return true; } });
 const storage = store.add(new BrowserStorageService({ ownerWindow: window, workspaceId: new URLSearchParams(location.search).get('console-workspace') ?? 'debug-console-integration', flushInterval: 0 }));
 services.registerInstance(IStorageService, storage);
-StandaloneServices.initialize().registerInstance(IStorageService, storage);
 StandaloneServices.initialize().registerInstance(IExtensionService, services.get(IExtensionService));
 StandaloneServices.initialize().registerInstance(IAccessibleViewService, services.get(IAccessibleViewService));
 const editor = store.add(create(document.querySelector<HTMLElement>('#editor')!, { model, automaticLayout: true }));

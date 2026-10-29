@@ -1,9 +1,9 @@
-import { h, type IDimension } from '../../../../base/browser/dom.js';
+import { h, scheduleAtNextAnimationFrame, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { DebugToolBar } from './debugToolBar.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -74,7 +74,16 @@ export class DebugViewPaneContainer extends PaneComposite {
 		const relayout = (): void => {
 			if (this.element.clientHeight > 0) this.layout({ width: this.element.clientWidth, height: this.element.clientHeight });
 		};
-		this._register(observeElementSize(this.chrome, relayout));
+		const relayoutFrame = this._register(new MutableDisposable<IDisposable>());
+		this._register(observeElementSize(this.chrome, () => {
+			if (relayoutFrame.value) return;
+			// Layout writes can resize the observed controls. Leave the observer's
+			// delivery cycle before applying their latest height to the panes.
+			relayoutFrame.value = scheduleAtNextAnimationFrame(container.ownerDocument.defaultView!, () => {
+				relayoutFrame.clear();
+				relayout();
+			});
+		}));
 		void debug.refresh().catch(error => {
 			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error.message : String(error));
 		});

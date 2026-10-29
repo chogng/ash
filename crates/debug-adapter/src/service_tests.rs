@@ -5,6 +5,45 @@ use super::push_message;
 use super::read_buffered_state;
 
 #[test]
+fn source_catalog_bursts_preserve_the_following_stop_without_expanding_the_byte_budget() {
+    let shared = std::sync::Arc::new(std::sync::Mutex::new(DebugAdapterState::default()));
+    for index in 0..5000 {
+        push_message(
+            &shared,
+            json!({"seq":index,"type":"event","event":"loadedSource","body":{"reason":"new","source":{"path":format!("/workspace/{index}.ts")}}}),
+        );
+    }
+    push_message(
+        &shared,
+        json!({"seq":5000,"type":"event","event":"stopped","body":{"threadId":1,"reason":"breakpoint"}}),
+    );
+    let mut state = shared.lock().unwrap();
+    let mut cursor = 0;
+    loop {
+        let read = read_buffered_state(&mut state, cursor, 128).unwrap();
+        assert!(!read.output_gap);
+        if read.messages.is_empty() {
+            break;
+        }
+        cursor = read.next_sequence;
+        if cursor == 5001 {
+            assert_eq!(read.messages.last().unwrap().message["event"], "stopped");
+        }
+    }
+    assert_eq!(cursor, 5001);
+    drop(state);
+    for index in 5001..5004 {
+        push_message(
+            &shared,
+            json!({"seq":index,"payload":"x".repeat(crate::MAX_MESSAGE_BYTES / 2)}),
+        );
+    }
+    let mut state = shared.lock().unwrap();
+    assert!(state.buffered_message_bytes <= crate::MAX_MESSAGE_BYTES);
+    assert!(read_buffered_state(&mut state, 0, 128).unwrap().output_gap);
+}
+
+#[test]
 fn buffered_messages_advance_only_through_the_returned_page() {
     let shared = std::sync::Arc::new(std::sync::Mutex::new(DebugAdapterState::default()));
     for index in 0..200 {

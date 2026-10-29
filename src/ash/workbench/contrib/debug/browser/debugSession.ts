@@ -140,6 +140,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private readonly threadEmitter = this._register(new Emitter<number | undefined>());
 	readonly onDidChangeThread = this.threadEmitter.event;
 	private runtime: DebugSessionSnapshot | undefined;
+	private stackInspection: { revision: number; threadId: number | undefined; result: Promise<IDebugStackInspection>; } | undefined;
 	get inspectionRevision(): number { return this.runtime?.inspectionRevision ?? 0; }
 	private readonly nameEmitter = this._register(new Emitter<string>());
 	private sessionName: string;
@@ -295,11 +296,24 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	async inspectStack(threadId?: number): Promise<IDebugStackInspection> {
-		const result = await this.transport!.inspect({ kind: 'stack', ...(threadId === undefined ? {} : { threadId: integer(threadId, 'threadId') }) }, this.runtime?.inspectionRevision ?? 0);
-		if (result.kind !== 'stack') throw new TypeError('Invalid stack inspection result');
-		const threads = result.threads.map(thread);
-		const selectedThread = result.threadId ?? undefined;
-		return { threads, frames: result.frames.map((value, index) => ({ ...stackFrame(value, index, this.workspace), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) })), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) };
+		this.assertNotDisposed();
+		const revision = this.inspectionRevision;
+		threadId ??= this.threadId;
+		if (threadId !== undefined) threadId = integer(threadId, 'threadId');
+		if (this.stackInspection?.revision === revision && this.stackInspection.threadId === threadId) return this.stackInspection.result;
+		// Adapters can allocate fresh frame IDs for every stackTrace. The editor
+		// and Call Stack must share one observation of the selected paused thread.
+		const result = this.transport!.inspect({ kind: 'stack', ...(threadId === undefined ? {} : { threadId }) }, revision).then(result => {
+			if (result.kind !== 'stack') throw new TypeError('Invalid stack inspection result');
+			const threads = result.threads.map(thread);
+			const selectedThread = result.threadId ?? undefined;
+			return { threads, frames: result.frames.map((value, index) => ({ ...stackFrame(value, index, this.workspace), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) })), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) };
+		}).catch(error => {
+			if (this.stackInspection?.result === result) this.stackInspection = undefined;
+			throw error;
+		});
+		this.stackInspection = { revision, threadId, result };
+		return result;
 	}
 
 	async inspectFrame(frameId: number, scopes: 'initial' | 'all' = 'initial'): Promise<readonly IDebugScopeInspection[]> {
@@ -605,6 +619,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private acceptRuntime(snapshot: DebugSessionSnapshot): void {
 		if (this.runtime && snapshot.revision <= this.runtime.revision) return;
 		const previous = this.runtime;
+		if (previous?.inspectionRevision !== snapshot.inspectionRevision || snapshot.state !== 'stopped') this.stackInspection = undefined;
 		this.runtime = snapshot;
 		this._capabilities = Object.freeze(snapshot.capabilities);
 		this._reason = snapshot.reason ?? undefined;
@@ -738,6 +753,9 @@ export class DebugSession extends Disposable implements IDebugSession {
 					this.adapterExitCode = read.exitCode ?? undefined;
 					break;
 				}
+				// Source catalogs can deliver thousands of small notifications on
+				// browser attach. Drain full pages before polling an idle adapter again.
+				if (read.messages.length === 128) continue;
 			} catch (error) {
 				this._reason = getErrorMessage(error);
 				void this.reportTrackerError(error);
@@ -836,6 +854,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private setState(state: DebugSessionState): void {
+		if (state !== 'stopped') this.stackInspection = undefined;
 		if (state === this._state) return;
 		this._state = state;
 		this.stateEmitter.fire(state);

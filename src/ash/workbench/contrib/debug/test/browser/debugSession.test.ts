@@ -655,6 +655,28 @@ async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedCon
 }
 
 
+test('DebugSession shares paused frame identities across stack observers and refreshes after invalidation', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	try {
+		processes.event('stopped', { threadId: processes.threadId });
+		await waitFor(() => session.state === 'stopped');
+		const [editor, panel] = await Promise.all([session.inspectStack(), session.inspectStack(session.threadId)]);
+		assert.strictEqual(editor, panel);
+		assert.equal(processes.requests('stackTrace').length, 1);
+		processes.frameId = 42;
+		assert.strictEqual((await session.inspectStack()).frames[0], editor.frames[0]);
+		const revision = session.inspectionRevision;
+		processes.event('invalidated', { areas: ['stacks'] });
+		await waitFor(() => session.inspectionRevision !== revision);
+		assert.equal((await session.inspectStack()).frames[0].id, 42);
+		assert.equal(processes.requests('stackTrace').length, 2);
+		await session.inspectStack(8);
+		assert.equal(processes.requests('stackTrace').length, 3);
+		assert.equal((processes.requests('stackTrace').at(-1)!.arguments as { threadId: number; }).threadId, 8);
+	} finally { await session.disconnect(); }
+});
+
 for (const id of [0, -1]) {
 	test(`DebugSession preserves thread and frame identifier ${id} across inspection and execution`, async () => {
 		using processes = new FakeDebugAdapterProcessService('/workspace/main.ts', true, true, true);

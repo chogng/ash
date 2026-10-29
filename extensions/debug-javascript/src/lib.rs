@@ -31,6 +31,8 @@ use std::time::Instant;
 mod auto_attach;
 mod auto_attach_controls;
 mod terminal;
+#[cfg(test)]
+mod configuration_tests;
 pub use auto_attach::helper as auto_attach_helper;
 
 #[derive(Default)]
@@ -114,6 +116,10 @@ impl external_ext_sdk::Extension for Extension {
                         .unwrap_or_default()
                         .into(),
                     kind: kind.into(),
+                    error: messages["error.configuration"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .into(),
                 },
             )?;
         }
@@ -179,6 +185,61 @@ impl external_ext_sdk::Extension for Extension {
 struct Configurations {
     title: String,
     kind: String,
+    error: String,
+}
+
+fn configure_browser_paths(properties: &mut BTreeMap<String, Value>) {
+    // Vite serves modules outside webRoot through /@fs/<absolute path>. Keep
+    // their compiled and original sources in the same filesystem namespace;
+    // otherwise a TS breakpoint can bind to the generated JS line instead.
+    properties
+        .entry("pathMapping".into())
+        .or_insert_with(|| json!({"/@fs/": if cfg!(windows) { "" } else { "/" }}));
+}
+
+enum NodeRuntime {
+    Node(PathBuf),
+    Electron {
+        executable: PathBuf,
+        launcher: PathBuf,
+    },
+}
+
+impl NodeRuntime {
+    fn apply(
+        self,
+        properties: &mut BTreeMap<String, Value>,
+        error: &str,
+    ) -> Result<(), ExtensionError> {
+        if properties.contains_key("runtimeExecutable") || properties.contains_key("runtimeVersion")
+        {
+            return Ok(());
+        }
+        let executable = match self {
+            Self::Node(executable) => executable,
+            Self::Electron {
+                executable,
+                launcher,
+            } => {
+                // js-debug clears ELECTRON_RUN_AS_NODE when launching a target. A
+                // provider-owned launcher restores Node mode after that boundary.
+                let environment = properties.entry("env".into()).or_insert(json!({}));
+                environment
+                    .as_object_mut()
+                    .ok_or_else(|| invalid(error))?
+                    .insert(
+                        "ASH_JS_DEBUG_NODE_RUNTIME".into(),
+                        json!(executable.to_string_lossy()),
+                    );
+                launcher
+            }
+        };
+        properties.insert(
+            "runtimeExecutable".into(),
+            json!(executable.to_string_lossy()),
+        );
+        Ok(())
+    }
 }
 impl ConfigurationProvider for Configurations {
     fn resolve_configuration(
@@ -193,6 +254,12 @@ impl ConfigurationProvider for Configurations {
             "msedge" => "pwa-msedge".into(),
             value => value.into(),
         };
+        if matches!(
+            request.configuration.debugger_type.as_str(),
+            "pwa-chrome" | "pwa-msedge"
+        ) {
+            configure_browser_paths(&mut request.configuration.properties);
+        }
         request
             .configuration
             .properties
@@ -227,18 +294,16 @@ impl ConfigurationProvider for Configurations {
                     .entry("runtimeSourcemapPausePatterns".into())
                     .or_insert(json!([program]));
             }
-            if !request
-                .configuration
-                .properties
-                .contains_key("runtimeVersion")
-            {
-                if let Some(node) = std::env::var_os("ASH_DEBUG_NODE_PATH") {
-                    request
-                        .configuration
-                        .properties
-                        .entry("runtimeExecutable".into())
-                        .or_insert(json!(node.to_string_lossy()));
-                }
+            if let Some(node) = std::env::var_os("ASH_DEBUG_NODE_PATH") {
+                let runtime = if std::env::var_os("ASH_DEBUG_ELECTRON").is_some() {
+                    NodeRuntime::Electron {
+                        executable: node.into(),
+                        launcher: std::env::current_exe().map_err(|_| invalid(&self.error))?,
+                    }
+                } else {
+                    NodeRuntime::Node(node.into())
+                };
+                runtime.apply(&mut request.configuration.properties, &self.error)?;
             }
             request
                 .configuration

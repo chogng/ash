@@ -61,6 +61,20 @@ function terminalNodeCommand(script: string): string {
 		? args.map(argument => `"${argument}"`).join(' ')
 		: args.map(argument => `'${argument.replaceAll("'", "'\\''")}'`).join(' ');
 }
+for (const consoleMode of ['internalConsole', 'integratedTerminal']) test(`managed Node runtime executes JavaScript in ${consoleMode} without an explicit executable`, tags, async ({ workbench, testWorkspace }) => {
+	const root = testWorkspace.directory;
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await writeFile(join(root, 'managed.cjs'), "if (process.type) throw Error('Expected Node mode');\nconst answer = 42;\nrequire('node:fs').writeFileSync('managed.pid', String(process.pid));\ndebugger;\nsetInterval(() => {}, 1000);\n");
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Managed Node', type: 'node', request: 'launch', program: '${workspaceFolder}/managed.cjs', cwd: '${workspaceFolder}', console: consoleMode }] }));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
+	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
+	await expect(pane.locator('.ash-debug-variables')).toContainText('answer');
+	await expect(pane.locator('.ash-debug-variables')).toContainText('42');
+	const pid = Number(await readFile(join(root, 'managed.pid'), 'utf8'));
+	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
+	await expect.poll(() => alive(pid)).toBe(false);
+});
 
 async function disableProvider(workbench: Workbench): Promise<void> {
 	const page = workbench.page;

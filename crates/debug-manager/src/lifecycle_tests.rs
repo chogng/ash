@@ -9,6 +9,65 @@ use super::Lifecycle;
 use super::json;
 
 #[test]
+fn a_configured_startup_pause_is_usable_before_the_launch_response() {
+    for success in [true, false] {
+        let mut lifecycle = Lifecycle::new();
+        let mut client = DebugClient::new(Duration::from_secs(15));
+        lifecycle
+            .begin(
+                &mut client,
+                DebugInitialize {
+                    adapter_id: "test".into(),
+                    request: DebugLaunchRequest::Launch,
+                    arguments: Default::default(),
+                    run_in_terminal: false,
+                    start_debugging: true,
+                },
+            )
+            .unwrap();
+        client.accept(&json!({"seq":0,"type":"response","request_seq":1,"command":"initialize","success":true,"body":{"supportsConfigurationDoneRequest":true}})).unwrap();
+        let launch = lifecycle.progress(&mut client).unwrap().remove(0);
+        lifecycle
+            .accept(&json!({"seq":0,"type":"event","event":"initialized"}))
+            .unwrap();
+        lifecycle.progress(&mut client).unwrap();
+        let exceptions = lifecycle.configure(&mut client, None).unwrap();
+        client.accept(&json!({"seq":0,"type":"response","request_seq":exceptions["seq"],"command":"setExceptionBreakpoints","success":true})).unwrap();
+        let configured = lifecycle.progress(&mut client).unwrap().remove(0);
+        lifecycle.accept(&json!({"seq":0,"type":"event","event":"stopped","body":{"threadId":3,"reason":"breakpoint"}})).unwrap();
+        lifecycle.progress(&mut client).unwrap();
+        assert_eq!(
+            lifecycle.snapshot.phase,
+            DebugInitializationPhase::Launching
+        );
+        client.accept(&json!({"seq":0,"type":"response","request_seq":configured["seq"],"command":"configurationDone","success":true})).unwrap();
+        lifecycle.progress(&mut client).unwrap();
+        assert_eq!(lifecycle.snapshot.phase, DebugInitializationPhase::Active);
+        assert_eq!(lifecycle.snapshot.state, DebugExecutionState::Stopped);
+        assert_eq!(lifecycle.snapshot.stopped_thread_id, Some(3));
+        assert!(lifecycle.allows("continue", &None));
+        client.accept(&json!({"seq":0,"type":"response","request_seq":launch["seq"],"command":"launch","success":success,"message":"launch failed"})).unwrap();
+        lifecycle.progress(&mut client).unwrap();
+        assert_eq!(
+            lifecycle.snapshot.state,
+            if success {
+                DebugExecutionState::Stopped
+            } else {
+                DebugExecutionState::Error
+            }
+        );
+        assert_eq!(
+            lifecycle.snapshot.phase,
+            if success {
+                DebugInitializationPhase::Active
+            } else {
+                DebugInitializationPhase::Ended
+            }
+        );
+    }
+}
+
+#[test]
 fn initialized_deadline_is_owned_by_rust_and_cannot_revive_after_timeout() {
     let mut lifecycle = Lifecycle::new();
     let mut client = DebugClient::new(Duration::from_secs(15));

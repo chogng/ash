@@ -419,8 +419,7 @@ impl ConfigurationProvider for LldbConfigurations {
     ) -> Result<Option<Configuration>, ExtensionError> {
         token.check_cancelled()?;
         let mut configuration = request.configuration;
-        if cfg!(windows)
-            && matches!(self.engine, Engine::CodeLldb)
+        if matches!(self.engine, Engine::CodeLldb)
             && configuration
                 .properties
                 .get("sourceLanguages")

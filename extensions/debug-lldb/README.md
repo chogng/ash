@@ -56,9 +56,9 @@ or terminating the bridge releases the tree. Transport flags (`--connect`,
 `--port`, `--multi-session`) are reserved by the bridge. Other platforms and
 `lldb-dap` retain their existing executable transport.
 
-Windows Rust sessions also install a bounded aggregate-summary wrapper in
+Rust sessions also install a bounded aggregate-summary wrapper in
 `preRunCommands`, after CodeLLDB loads the toolchain formatters. It detects
-self-referential CodeView fields and bounds traversal to 8 levels, 64 aggregates
+self-referential CodeView fields and large DWARF graphs, and bounds traversal to 8 levels, 64 aggregates
 and 8 fields per summary,
 preserving ordinary summaries and user commands across resolution and restart.
 

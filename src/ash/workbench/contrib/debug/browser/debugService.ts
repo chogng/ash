@@ -625,14 +625,20 @@ export class DebugService extends Disposable implements IDebugService {
 			if (this.session === session) void this.refreshFocusedStack();
 		}));
 		listener.add(session.onDidChangeState(state => {
+			if (state === 'stopped' && this.session !== session) {
+				this.viewModel.setFocus(undefined, undefined, session, false);
+				this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
+			}
 			if (this.session === session && state !== "stopped") void this.focusStackFrame(undefined);
 			if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
 			if (state === "terminated" || state === "error") queueMicrotask(() => { void this.finishSession(session); });
 		}));
 		this.sessionRecords.set(session.id, { session, workspaceGeneration, workspaceId: this.workspace.getWorkspace().id, listener, postDebugTask: resolvedConfiguration.postDebugTask });
-		this.viewModel.setFocus(undefined, undefined, session, true);
+		// Discovering a running worker must preserve the frame being inspected.
+		const preserveFocus = sessionOptions.lifecycleManagedByParent && session.state !== 'stopped' && this.session?.state === 'stopped';
+		if (!preserveFocus) this.viewModel.setFocus(undefined, undefined, session, true);
 		this.newSessionEmitter.fire(session);
-		this.sessionEmitter.fire(session);
+		if (!preserveFocus) this.sessionEmitter.fire(session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 		if (session.state === "terminated" || session.state === "error") { await this.finishSession(session); }
 		return session;

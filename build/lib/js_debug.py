@@ -20,6 +20,15 @@ _LOCK = json.loads(
 VERSION = _LOCK["version"]
 SHA256 = _LOCK["sha256"]
 
+# Electron can report this advisory notification before the worker session is
+# registered. js-debug does not consume it, but its unknown-session exception
+# aborts the WebSocket receiver and strands every subsequent CDP request.
+# Match the pinned bundle exactly; upgrades must review this compatibility fix.
+_UNKNOWN_SESSION = "else throw new Error(`Unknown session id: ${n.sessionId} while processing: ${n.method}`)"
+_EARLY_WORKER_EVENT = (
+    'else if(n.method==="Inspector.workerScriptLoaded")return;' + _UNKNOWN_SESSION
+)
+
 
 @dataclass(frozen=True)
 class Artifact:
@@ -29,6 +38,10 @@ class Artifact:
 
 
 def copy_runtime(repository: Path, destination: Path) -> None:
+    if VERSION != "v1.140.0":
+        raise RuntimeError(
+            "Pinned JavaScript debugger early-worker patch requires review"
+        )
     artifact = Artifact()
     archive = repository / ".build/downloads/js-debug" / VERSION / "js-debug.tar.gz"
     if not archive_is_valid(archive, artifact):
@@ -66,6 +79,16 @@ def copy_runtime(repository: Path, destination: Path) -> None:
         or not (destination / "LICENSE").is_file()
     ):
         raise RuntimeError("Missing standalone JavaScript debug server")
+
+    server = destination / "src/dapDebugServer.js"
+    source = server.read_text(encoding="utf-8")
+    if source.count(_UNKNOWN_SESSION) != 1:
+        raise RuntimeError(
+            "Pinned JavaScript debugger early-worker patch no longer matches"
+        )
+    server.write_text(
+        source.replace(_UNKNOWN_SESSION, _EARLY_WORKER_EVENT), encoding="utf-8"
+    )
 
     bootstrap = destination.parent / "src"
     bootstrap.mkdir(parents=True, exist_ok=True)

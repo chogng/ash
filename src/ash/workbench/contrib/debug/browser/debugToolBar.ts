@@ -48,6 +48,7 @@ export class DebugToolBar extends Disposable {
 			if (event.affectsSome(new Set(['debugUx']))) this.render();
 		}));
 		this._register(debug.onDidChangeSession(() => { this.error = undefined; this.render(); }));
+		this._register(debug.onDidNewSession(() => this.render()));
 		this._register(debug.getViewModel().onDidFocusStackFrame(() => { this.error = undefined; this.render(); }));
 		this.render();
 	}

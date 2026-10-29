@@ -26,7 +26,7 @@ console; 20 retained ended consoles), normalization, grouping, clear, and REPL
 input/result/error ordering. Object references retain their original inspection
 epoch. Output and the graph are connection-owned, never workspace-persistent.
 
-The manager owns up to eight sessions. Each contains one `ash-debug-client` and
+The manager owns up to sixteen sessions. Each contains one `ash-debug-client` and
 either an `ash-debug-adapter` process/TCP/pipe transport or client-supplied inline
 IO. Inline input is rejected for process/network sessions. Both directory grants
 must remain active for reads and operations; close remains available after revocation.
@@ -38,7 +38,7 @@ and reads the paired result, independently of the panel/observation reader.
 through the same ordered observations and forwarded by Workbench's raw session.
 
 Each observation page retains both message directions for tracker ordering. The
-log is bounded to 512 messages and the transport's four-MiB frame budget; reads
+log is bounded to 8,192 messages and the transport's four-MiB frame budget; reads
 advance only through the returned page and report an evicted prefix as a gap.
 Stderr is retained separately up to 64 KiB, including when response polling reads
 the transport first. Protocol failures settle pending requests. EOF drains all

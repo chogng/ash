@@ -340,7 +340,7 @@ fn managed_request() -> ExtensionInvocation {
 }
 
 #[test]
-fn windows_rust_formatter_guard_preserves_commands_across_both_resolution_phases() {
+fn rust_formatter_guard_preserves_commands_across_both_resolution_phases() {
     let running = running("en");
     let mut configuration = json!({"type":"lldb","name":"Rust","request":"launch","program":"/workspace/app","sourceLanguages":["rust"],"initCommands":["version"],"preRunCommands":["settings set target.max-children-count 50"]});
     for operation in [
@@ -359,14 +359,12 @@ fn windows_rust_formatter_guard_preserves_commands_across_both_resolution_phases
             .clone();
         assert_eq!(configuration["initCommands"], json!(["version"]));
         let commands = configuration["preRunCommands"].as_array().unwrap();
-        assert_eq!(commands.len(), if cfg!(windows) { 2 } else { 1 });
+        assert_eq!(commands.len(), 2);
         assert_eq!(
             commands.last().unwrap(),
             "settings set target.max-children-count 50"
         );
-        if cfg!(windows) {
-            assert!(commands[0].as_str().unwrap().contains("_ash_bounded"));
-        }
+        assert!(commands[0].as_str().unwrap().contains("_ash_bounded"));
     }
 }
 

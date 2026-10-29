@@ -3,6 +3,7 @@
   "compilerOptions": {
     "outDir": ".build/desktop/main",
     "sourceMap": true,
+    "inlineSources": true,
     "incremental": true,
     "tsBuildInfoFile": ".build/desktop/main.tsbuildinfo",
     "rootDir": ".",

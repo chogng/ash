@@ -47,6 +47,12 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let relaunch = false;
 		let busy = false;
 		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: process.platform !== 'win32' });
+		const inspector = args.find(argument => /^--inspect(?:-brk)?=/u.test(argument));
+		if (inspector) {
+			// js-debug can suppress the runtime's Inspector stderr. Publish from the
+			// launcher instead; attach owns waiting for the new process to listen.
+			child.once('spawn', () => console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`));
+		}
 		child.on('message', message => {
 			if (message === 'ash:dev:ready') { ready = true; busySince = undefined; }
 			if (message === 'ash:dev:relaunch') relaunch = true;

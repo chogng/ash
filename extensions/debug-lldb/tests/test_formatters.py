@@ -26,7 +26,7 @@ class Value:
         return self.count
 
 
-class WindowsRustSummaryTests(unittest.TestCase):
+class RustSummaryTests(unittest.TestCase):
     def install(self, original):
         providers = SimpleNamespace(aggregate_field_summary=original)
         with patch.dict(sys.modules, {"lldb_providers": providers}):
@@ -80,6 +80,26 @@ class WindowsRustSummaryTests(unittest.TestCase):
                 list(providers.aggregate_field_summary(Value(1, 1), {})), ["Aggregate"]
             )
         self.assertEqual(visited, [*range(1, 9), *range(1, 9)])
+
+    def test_large_branching_graph_has_a_shared_summary_budget(self):
+        visited = []
+
+        def summary(value, internal):
+            visited.append(value.address)
+            for index in range(8):
+                yield str(
+                    list(
+                        providers.aggregate_field_summary(
+                            Value(value.address * 8 + index, 8), internal
+                        )
+                    )
+                )
+
+        providers = self.install(summary)
+        for _ in range(2):
+            before = len(visited)
+            list(providers.aggregate_field_summary(Value(1, 8), {}))
+            self.assertEqual(len(visited) - before, 64)
 
 
 if __name__ == "__main__":
