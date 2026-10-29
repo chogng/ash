@@ -282,7 +282,7 @@ test('Workbench follows system color changes without reopening the window', asyn
 test.describe('Workbench shell colors', () => {
 	test.use({ openWorkspace: false });
 
-	test('Dark and light themes color the shell and Welcome together', async ({ application, workbench }) => {
+	test('Dark and light themes color the shell and Welcome together', async ({ application, workbench }, testInfo) => {
 		const titleBar = workbench.element.locator('.ash-workbench-titlebar');
 		const activityBar = workbench.element.locator('.ash-workbench-activitybar');
 		const selectedActivity = activityBar.locator('.ash-composite-bar-item.checked').first();
@@ -303,9 +303,35 @@ test.describe('Workbench shell colors', () => {
 		await expect(selectedActivity).toHaveCSS('color', 'rgb(204, 204, 204)');
 		await expect.poll(() => selectedActivity.evaluate(element => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(55, 55, 55)');
 		await expect(statusBar).toHaveCSS('background-color', 'rgb(30, 30, 30)');
-		await expect(commandCenter).toHaveCSS('background-color', 'rgb(43, 43, 43)');
+		await welcome.hover();
+		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
 		await expect(commandCenter).toHaveCSS('color', 'rgb(204, 204, 204)');
 		await expect(statusBar).toHaveCSS('color', 'rgb(204, 204, 204)');
+		await commandCenter.hover();
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(51, 51, 51)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(69, 69, 69)');
+		await welcome.hover();
+		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await commandCenter.focus();
+		await commandCenter.press('Tab');
+		await workbench.page.keyboard.press('Shift+Tab');
+		await expect(commandCenter).toBeFocused();
+		await expect(commandCenter).toHaveCSS('outline-style', 'solid');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(136, 136, 136)');
+		await commandCenter.hover();
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(51, 51, 51)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(136, 136, 136)');
+		await welcome.hover();
+		await commandCenter.press('Enter');
+		await expect(commandCenter).toHaveAttribute('aria-expanded', 'true');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(30, 30, 30)');
+		await workbench.page.keyboard.press('Escape');
+		await expect(commandCenter).toHaveAttribute('aria-expanded', 'false');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await commandCenter.press('Tab');
+		await expect(commandCenter).not.toBeFocused();
+		await workbench.element.screenshot({ path: testInfo.outputPath('dark-command-center.png') });
 
 		await workbench.setAppearance(application, 'light');
 		await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
@@ -314,7 +340,12 @@ test.describe('Workbench shell colors', () => {
 		await expect(activityBar).toHaveCSS('background-color', 'rgb(248, 248, 248)');
 		await expect(selectedActivity).toHaveCSS('color', 'rgb(31, 31, 31)');
 		await expect(statusBar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-		await expect(commandCenter).toHaveCSS('background-color', 'rgb(246, 246, 246)');
+		await welcome.hover();
+		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await commandCenter.hover();
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(235, 235, 235)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(208, 208, 208)');
+		await workbench.element.screenshot({ path: testInfo.outputPath('light-command-center-hover.png') });
 	});
 });
 

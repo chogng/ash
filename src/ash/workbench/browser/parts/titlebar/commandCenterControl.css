@@ -20,13 +20,14 @@
 	min-height: 24px;
 	min-width: 0;
 	padding: 0 8px;
-	background: var(--ash-commandCenter-background);
-	border: var(--ash-strokeThickness) solid var(--ash-commandCenter-border);
+	background: transparent;
+	border: var(--ash-strokeThickness) solid transparent;
 	border-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-titlebar-command-center-button:hover {
 	background: var(--ash-commandCenter-hoverBackground);
+	border-color: var(--ash-commandCenter-border);
 }
 
 .ash-titlebar-command-center-button:active,
