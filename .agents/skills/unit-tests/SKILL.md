@@ -44,6 +44,10 @@ A single leading package-manager `--` separator is accepted. Unknown options, mi
 
 For scope, fixture ownership and cleanup, read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) and [TypeScript Testing](../../../.github/instructions/typescript-testing.instructions.md). Complete product flows belong in [smoke-tests](../smoke-tests/SKILL.md).
 
+## Preparation failures
+
+For an `Unknown translation` preparation error, locate the exact `{ bundle, key }` declared in source before editing the catalog; a translation file's domain name does not select its bundle. If the declaration exists under another bundle, move the existing translation there; remove it only when its source declaration is gone. Follow [localization validation](../../../localization/README.md#生成与校验), then retry the original test command: a targeted run using cached generated resources does not prove that preparation succeeds.
+
 ## Stopping and reusing validation
 
 The runner keeps each file in an isolated Mocha process, rejects `.only`, and prints completed files without interleaving their reporters. Ctrl-C / SIGINT or SIGTERM stops all active children and their descendants and leaves queued files unstarted. Interrupt again to skip the graceful wait. Wait for the actual command to exit before reporting it stopped. Reuse passing results whose inputs still cover the changes; do not rerun tests merely for a commit or push. `test:editor` is an unfiltered combined target; use the individual editor commands for filtering.
