@@ -86,6 +86,9 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 		},
 	};
 }
+let completeCustomizeDetails = (): void => { };
+let customizeDetailsRead: 'ready' | 'hold' | 'fail' = 'ready';
+window.addEventListener('pagehide', () => completeCustomizeDetails(), { once: true });
 // Synthetic catalogs exercise the real Sessions composition without using a personal profile.
 if (new URL(location.href).searchParams.has('customize')) {
 	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
@@ -99,7 +102,16 @@ if (new URL(location.href).searchParams.has('customize')) {
 	const installed: Awaited<ReturnType<typeof disconnectedApi.extensionManagement.install>>[] = [];
 	globalThis.ashWebWorkbenchHost = { api: {
 		...globalThis.ashWebWorkbenchHost!.api,
-		skills: { ...disconnectedApi.skills, list: async () => catalog, read: async () => ({ revision: 1, catalog, diagnostics: [] }) },
+		skills: {
+			...disconnectedApi.skills, list: async () => catalog,
+			read: async () => {
+				const mode = customizeDetailsRead;
+				customizeDetailsRead = 'ready';
+				if (mode === 'fail') throw new Error('Synthetic detail failure');
+				if (mode === 'hold') await new Promise<void>(resolve => { completeCustomizeDetails = resolve; });
+				return { revision: 1, catalog, diagnostics: [] };
+			},
+		},
 		plugins: { ...disconnectedApi.plugins, list: async () => ({ revision: 1, activationGeneration: 1, packages: [{
 			id: 'fixture.local', version: '1.0.0', digest: 'a'.repeat(64), displayName: 'Local productivity', permissions: [],
 			hasEditorExtensions: true, enabled: true, granted: false, effective: false, revoked: false,
@@ -179,6 +191,8 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
+			completeCustomizeDetails(): void;
+			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
 			readonly errors: readonly string[];
 			readonly multiHost?: ReturnType<typeof installMultiHostSessionsFixture>;
 			readonly errorDetails: readonly string[];
@@ -196,6 +210,8 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
+	completeCustomizeDetails: () => completeCustomizeDetails(),
+	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },
 	errors, errorDetails, multiHost,
 	setUpdateState: value => { updateState = value; updateChanges.fire(value); },
 	getUpdateInstallCount: () => updateInstallCount,

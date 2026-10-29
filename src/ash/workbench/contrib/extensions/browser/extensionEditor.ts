@@ -55,6 +55,13 @@ interface DetailInfoSection {
 	readonly rows: readonly { readonly label: string; readonly value: string; }[];
 }
 
+interface ExtensionEditorOptions {
+	readonly presentation?: 'editor' | 'page';
+	readonly accessibilityHelp?: string;
+	/** Keeps resource links in the embedding host's navigation, while document links use the editor. */
+	readonly openDetails?: (input: ExtensionsInput | ExtensionsCapabilityInput) => Promise<void>;
+}
+
 /** Package review and mutations share the same exact-version confirmation in rows and editor. */
 export async function changeExtensionPackage(service: IExtensionManagementService, dialogs: IDialogService, notifications: INotificationService, operation: 'install' | 'update' | 'uninstall', details: ExtensionsPackageDetails | undefined, installation?: ExtensionsInstalledPackage): Promise<ExtensionsInstalledPackage | null | undefined> {
 	if (operation === 'uninstall' && installation) {
@@ -104,7 +111,7 @@ class ExtensionDetailHeader extends Disposable {
 	public readonly iconText = h(mainWindow.document, 'span');
 	public readonly enablement: Switch;
 
-	constructor() {
+	constructor(presentation: ExtensionEditorOptions['presentation']) {
 		super();
 		this.element.className = 'extension-detail-header';
 		this.icon.className = 'extension-detail-icon'; this.icon.setAttribute('aria-hidden', 'true');
@@ -125,7 +132,12 @@ class ExtensionDetailHeader extends Disposable {
 		this.enablement.element.hidden = true;
 		this.actions.className = 'extension-actions';
 		this.status.setAttribute('role', 'status');
-		heading.append(identityRow, descriptionRow, this.actions, this.status);
+		if (presentation === 'page') {
+			identityRow.insertBefore(this.actions, this.enablement.element);
+			heading.append(identityRow, this.status);
+		} else {
+			heading.append(identityRow, descriptionRow, this.actions, this.status);
+		}
 		this.element.append(this.icon, heading);
 	}
 }
@@ -160,7 +172,8 @@ export class ExtensionEditor extends EditorPane {
 	private currentSignal: AbortSignal | undefined;
 	private readonly localization: MainThreadLocalization;
 
-	constructor(@IExtensionManagementService private readonly extensions: IExtensionManagementService,
+	constructor(private readonly options: ExtensionEditorOptions,
+		@IExtensionManagementService private readonly extensions: IExtensionManagementService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ICommandService private readonly commands: ICommandService,
@@ -199,15 +212,20 @@ export class ExtensionEditor extends EditorPane {
 		this.scrollable.element.classList.add('ash-extension-editor-scrollable');
 		this.domNode = h(mainWindow.document, 'section');
 		this.domNode.className = 'ash-extension-editor';
+		this.domNode.classList.toggle('page', this.options.presentation === 'page');
 		this.scrollable.setContent(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		super.create(this.scrollable.element);
-		this.header = this._register(new ExtensionDetailHeader());
+		this.header = this._register(new ExtensionDetailHeader(this.options.presentation));
 		const header = this.header.element;
 		this.contentHeading = h(mainWindow.document, 'h2');
 		this.capabilities = h(mainWindow.document, 'div'); this.capabilities.className = 'extension-capabilities';
 		const tabHost = h(mainWindow.document, 'div'); tabHost.className = 'extension-detail-tabs';
-		this.tabs = this._register(new TabList<DetailTab>(tabHost, { ariaLabel: localize({ bundle: 'ash.extensions', key: 'detailTabs' }, 'Extension details'), presentation: 'flush', onActivate: tab => this.selectTab(tab) }));
+		this.tabs = this._register(new TabList<DetailTab>(tabHost, {
+			ariaLabel: localize({ bundle: 'ash.extensions', key: 'detailTabs' }, 'Extension details'),
+			presentation: this.options.presentation === 'page' ? 'underline' : 'flush',
+			onActivate: tab => this.selectTab(tab),
+		}));
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-detail-body';
 		const article = h(mainWindow.document, 'div'); article.className = 'extension-detail-content';
 		for (const tab of [DetailTab.Details, DetailTab.Features, DetailTab.Instructions]) {
@@ -234,7 +252,7 @@ export class ExtensionEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity, publisher and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the header identity enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, service account or MCP server details. The header contains identity, publisher and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. The switch at the right of the header identity enables or disables the selected resource. Press Space to toggle it. For a service account, the switch connects or disconnects while preserving authorization and credentials. Service account details offer sign-in, API token connection, disconnect or sign-out according to the service. Associated MCP status appears in the account details; Open MCP server details shows its tools and diagnostics. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Connect, Disconnect and Remove for independent servers; the header switch controls saved enablement. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.') + (this.options.accessibilityHelp ? `\n\n${this.options.accessibilityHelp}` : ''), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -373,7 +391,7 @@ export class ExtensionEditor extends EditorPane {
 				const mcpServerId = connector.mcpServerId;
 				if (mcpServerId) {
 					button(localize({ bundle: 'ash.extensions', key: 'connectionMcpDetails' }, 'Open MCP server details'), async () => {
-						await this.editors.openEditor(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: mcpServerId }));
+						await this.openDetails(new ExtensionsCapabilityInput({ kind: 'mcp', serverId: mcpServerId }));
 					});
 				}
 				return;
@@ -551,7 +569,7 @@ export class ExtensionEditor extends EditorPane {
 			if (!configuredServer) { this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableMcpServer' }, 'Enable MCP server'), checked: !!server && server.state.status !== 'disabled', enabled: false }); }
 			if (installation && capability) {
 				button(localize({ bundle: 'ash.extensions', key: 'openPackage' }, 'Open package'), async () => {
-					await this.editors.openEditor(new ExtensionsInput({ id: installation.package.id, version: installation.package.version, displayName: installation.package.id, description: '', packageType: 'plugin' }, installation.installationId));
+					await this.openDetails(new ExtensionsInput({ id: installation.package.id, version: installation.package.version, displayName: installation.package.id, description: '', packageType: 'plugin' }, installation.installationId));
 				});
 			}
 			button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), async () => {
@@ -739,6 +757,14 @@ export class ExtensionEditor extends EditorPane {
 		}));
 	}
 
+	private async openDetails(input: ExtensionsInput | ExtensionsCapabilityInput): Promise<void> {
+		if (this.options.openDetails) {
+			await this.options.openDetails(input);
+		} else {
+			await this.editors.openEditor(input);
+		}
+	}
+
 	private renderOverview(): void {
 		this.overviewHeading.hidden = false; this.overview.hidden = false;
 		this.overviewHeading.textContent = localize({ bundle: 'ash.extensions', key: 'detailAbout' }, 'About');
@@ -877,6 +903,6 @@ registerEditorPane({
 	canOpen: input => (input instanceof ExtensionsInput || input instanceof ExtensionsCapabilityInput) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) { throw new Error('Extensions editor requires the Instantiation Service'); }
-		return options.instantiationService.createInstance(ExtensionEditor);
+		return options.instantiationService.createInstance(ExtensionEditor, {});
 	},
 });

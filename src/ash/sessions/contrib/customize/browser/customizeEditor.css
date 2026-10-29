@@ -1,16 +1,43 @@
 .ash-customize {
 	box-sizing: border-box;
-	padding: var(--ash-spacing-size320);
-	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);
 }
 
-.ash-customize [hidden] {
+.ash-customize-catalog {
+	flex: 1;
+	min-height: 0;
+	padding: var(--ash-spacing-size320);
+	overflow: auto;
+}
+
+.ash-customize-details {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-customize-detail-navigation {
+	padding: var(--ash-spacing-size320) var(--ash-spacing-size320)
+		var(--ash-spacing-size240);
+}
+
+.ash-customize-detail-host {
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-customize-catalog[hidden],
+.ash-customize-details[hidden],
+.ash-customize-catalog [hidden] {
 	display: none;
 }
 
-.ash-customize h1 {
+.ash-customize-catalog > h1 {
 	margin: 0 0 var(--ash-spacing-size280);
 	font-size: var(--ash-fontSize-heading2);
 	font-weight: var(--ash-fontWeight-semiBold);
@@ -255,7 +282,8 @@
 	background: var(--ash-editor-background);
 }
 
-.ash-customize.narrow {
+.ash-customize.narrow .ash-customize-catalog,
+.ash-customize.narrow .ash-customize-detail-navigation {
 	padding: var(--ash-spacing-size200);
 }
 
