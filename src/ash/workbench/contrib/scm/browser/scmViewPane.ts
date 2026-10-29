@@ -399,8 +399,10 @@ export class ScmViewPane extends ViewPane {
 		const descriptor = provider?.actionButton;
 		const buttonTitle = descriptor?.command.title ?? provider?.input.buttonLabel ?? localize('scm.commit', 'Commit');
 		const buttonLabel = stripIcons(buttonTitle).trim();
-		const icon = buttonTitle.match(/^\$\(([a-z0-9-]+)\)/u)?.[1];
+		const iconToken = buttonTitle.match(/^\$\(([a-z0-9-]+)(?:~([a-z]+))?\)/u);
+		const icon = iconToken?.[1];
 		this.commitButton.icon = icon ? getRegisteredIcon(icon, this.element.ownerDocument) : descriptor ? undefined : Lxicon.check;
+		this.commitButton.toggleClassName('ash-scm-commit-spinning', iconToken?.[2] === 'spin');
 		if (this.commitButton.label !== buttonLabel) this.commitButton.label = buttonLabel;
 		const buttonTooltip = descriptor?.command.tooltip ?? provider?.input.buttonTooltip ?? buttonLabel;
 		if (this.commitTooltip !== buttonTooltip) {

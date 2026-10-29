@@ -692,6 +692,22 @@
 	min-width: 0;
 }
 
+.ash-scm-commit-spinning .ash-icon-label-icon {
+	animation: ash-scm-commit-spin 1.5s linear infinite;
+}
+
+@keyframes ash-scm-commit-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-scm-commit-spinning .ash-icon-label-icon {
+		animation: none;
+	}
+}
+
 .ash-scm-commit .ash-button-label {
 	overflow: hidden;
 	white-space: nowrap;

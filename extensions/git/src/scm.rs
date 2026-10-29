@@ -378,6 +378,12 @@ pub fn snapshot(
         format!(
             "$({}) {label}",
             match primary {
+                "sync" | "publish"
+                    if repository.operation
+                        == Some(crate::model::RepositoryOperation::Synchronize) =>
+                {
+                    "sync~spin"
+                }
                 "sync" => "sync",
                 "publish" => "cloud",
                 _ => "check",

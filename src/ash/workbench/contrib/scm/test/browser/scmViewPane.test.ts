@@ -2304,6 +2304,7 @@ test('SCM compound commit button dispatches provider commands and keeps menu own
 	const provider = fixture.scm.getRepository('first')!.provider;
 	let enabled = true;
 	let busy = false;
+	let spinning = false;
 	const calls: unknown[][] = [];
 	fixture.add(CommandsRegistry.register('scm.test.commit', (_accessor, ...args) => { calls.push([...args]); }));
 	fixture.add(CommandsRegistry.register('scm.test.amend', (_accessor, ...args) => { calls.push([...args]); }));
@@ -2311,7 +2312,7 @@ test('SCM compound commit button dispatches provider commands and keeps menu own
 		input: { value: { ...provider.input, enabled: true, canAccept: true } },
 		actionButton: {
 			get: () => ({
-				command: { id: 'scm.test.commit', title: '$(check) Commit', arguments: ['first', 'primary'] }, enabled,
+				command: { id: 'scm.test.commit', title: spinning ? '$(sync~spin) Sync Changes' : '$(check) Commit', arguments: ['first', 'primary'] }, enabled,
 				secondaryCommands: [[{ id: 'scm.test.amend', title: 'Commit (Amend)', arguments: ['first', 'amend'] }]],
 			})
 		},
@@ -2348,12 +2349,19 @@ test('SCM compound commit button dispatches provider commands and keeps menu own
 	assert.equal(calls.length, 2, 'An open menu never follows a later repository selection');
 	fixture.views.selectRepository('first');
 	busy = true;
+	spinning = true;
 	fixture.refresh();
+	assert.equal(main.textContent, 'Sync Changes');
+	assert.ok(main.querySelector('[data-ash-icon-id="sync"]'));
+	assert.ok(main.classList.contains('ash-scm-commit-spinning'));
 	assert.equal(main.disabled, true);
 	assert.equal(dropdown.disabled, true);
 	busy = false;
+	spinning = false;
 	enabled = false;
 	fixture.refresh();
+	assert.equal(main.textContent, 'Commit');
+	assert.ok(!main.classList.contains('ash-scm-commit-spinning'));
 	assert.equal(main.disabled, true);
 	assert.equal(dropdown.disabled, true);
 });
