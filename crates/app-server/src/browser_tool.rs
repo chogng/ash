@@ -35,10 +35,10 @@ use serde_json::json;
 use std::sync::Arc;
 use url::Url;
 
-const BROWSER_POLICY_REVISION: &str = "browser-host-user-approval-v2";
+pub(crate) const BROWSER_POLICY_REVISION: &str = "browser-host-user-approval-v2";
 const MAX_URL_LENGTH: usize = 8192;
 
-const OPEN_SCHEMA: &str = r#"{"type":"object","properties":{"url":{"type":"string","description":"HTTPS, loopback HTTP, or about:blank URL to open."}},"required":["url"],"additionalProperties":false}"#;
+const OPEN_SCHEMA: &str = r#"{"type":"object","properties":{"url":{"type":"string","description":"HTTPS, loopback HTTP, or about:blank URL to open."},"canvas":{"type":["object","null"],"description":"Present an interactive page as a conversation Canvas. Reuse instance_id to update and reveal that Canvas.","properties":{"instance_id":{"type":"string","pattern":"^[A-Za-z0-9._-]+$","minLength":1,"maxLength":128},"title":{"type":"string","minLength":1,"maxLength":256}},"required":["instance_id","title"],"additionalProperties":false}},"required":["url","canvas"],"additionalProperties":false}"#;
 const OBSERVE_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"include_dom_snapshot":{"type":"boolean"},"include_screenshot":{"type":"boolean"}},"required":["target_id","include_dom_snapshot","include_screenshot"],"additionalProperties":false}"#;
 const NAVIGATE_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"url":{"type":"string"}},"required":["target_id","url"],"additionalProperties":false}"#;
 const ELEMENT_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"node_id":{"type":"string","description":"backendDOMNodeId returned by browser_observe."}},"required":["target_id","node_id"],"additionalProperties":false}"#;
@@ -52,6 +52,7 @@ const SCRIPT_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type
 const CDP_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"method":{"type":"string","minLength":1,"maxLength":256},"params_json":{"type":"string","description":"JSON object containing CDP command parameters."},"session_id":{"type":["string","null"],"description":"Flattened CDP session ID, or null to select the page automatically (browser and Target commands use the logical browser)."}},"required":["target_id","method","params_json","session_id"],"additionalProperties":false}"#;
 const LIST_SCHEMA: &str =
     r#"{"type":"object","properties":{},"required":[],"additionalProperties":false}"#;
+const CANVAS_OPEN_SCHEMA: &str = r#"{"type":"object","properties":{"extension_id":{"type":"string","minLength":1,"maxLength":1024},"canvas_id":{"type":"string","pattern":"^[A-Za-z0-9._-]+$","minLength":1,"maxLength":128},"instance_id":{"type":"string","pattern":"^[A-Za-z0-9._-]+$","minLength":1,"maxLength":128}},"required":["extension_id","canvas_id","instance_id"],"additionalProperties":false}"#;
 
 pub(crate) struct BrowserToolService {
     browser: Arc<crate::browser_host::BrowserHost>,
@@ -63,6 +64,16 @@ impl BrowserToolService {
         Self {
             browser,
             definitions: vec![
+                definition(
+                    "canvas_list",
+                    "List registered Canvas types available to this conversation. A null canvases result means the extension registry is reconnecting. Types requiring input must be opened through their extension's own tools.",
+                    LIST_SCHEMA,
+                ),
+                definition(
+                    "canvas_open",
+                    "Open a registered Canvas type returned by canvas_list beside this conversation. Reuse instance_id to update and reveal the same instance. Returns a browser target ID for browser_observe and browser_close. Its page still uses this task's network permissions.",
+                    CANVAS_OPEN_SCHEMA,
+                ),
                 definition(
                     "browser_cdp",
                     "Send a Chrome DevTools Protocol command. Requires the user's advanced CDP setting. Access is limited to this task's isolated Agent pages and contexts; Ash workbench targets and user pages are excluded. Page domains select target_id automatically; use session_id for child targets. Events are buffered for browser_cdp_events. New targets also return browserViewId for the semantic browser tools. Network requests retain the task's network policy. File uploads read each path through the task's file permissions; direct host filesystem methods are restricted.",
@@ -105,7 +116,7 @@ impl BrowserToolService {
                 ),
                 definition(
                     "browser_open",
-                    "Open an isolated embedded browser target and return its stable target ID.",
+                    "Open an isolated embedded browser target and return its stable target ID. Supply canvas to show an interactive page beside this conversation; use null for an ordinary browser tab. Reuse a canvas instance_id to update and reopen it. Closing its tab hides the Canvas; browser_close ends it.",
                     OPEN_SCHEMA,
                 ),
                 definition(
@@ -159,6 +170,23 @@ impl BrowserToolService {
 
     fn materialize(&self, call: &ToolCall) -> Result<BrowserToolRequest, CoreError> {
         match call.name.as_str() {
+            "canvas_list" => {
+                let _: EmptyArguments = decode(call)?;
+                Ok(BrowserToolRequest::CanvasList)
+            }
+            "canvas_open" => {
+                let arguments: RegisteredCanvasArguments = decode(call)?;
+                if arguments.extension_id.trim().is_empty()
+                    || arguments.extension_id.len() > 1024
+                    || !valid_canvas_id(&arguments.canvas_id)
+                    || !valid_canvas_id(&arguments.instance_id)
+                {
+                    return Err(CoreError::Policy(
+                        "invalid registered Canvas identity".into(),
+                    ));
+                }
+                Ok(BrowserToolRequest::CanvasOpen(arguments))
+            }
             "browser_cdp" => {
                 let args: CdpArguments = decode(call)?;
                 let mut parts = args.method.split('.');
@@ -251,8 +279,22 @@ impl BrowserToolService {
             }
             "browser_open" => {
                 let arguments: OpenArguments = decode(call)?;
+                if let Some(canvas) = &arguments.canvas {
+                    if canvas.title.trim().is_empty()
+                        || canvas.title.len() > 256
+                        || canvas.instance_id.is_empty()
+                        || canvas.instance_id.len() > 128
+                        || !canvas.instance_id.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                        })
+                        || arguments.url == "about:blank"
+                    {
+                        return Err(CoreError::Policy("invalid Canvas presentation".into()));
+                    }
+                }
                 Ok(BrowserToolRequest::Open {
                     url: normalize_browser_url(&arguments.url)?,
+                    canvas: arguments.canvas,
                 })
             }
             "browser_observe" => {
@@ -417,7 +459,8 @@ impl ToolService for BrowserToolService {
         cancellation: &CancellationToken,
         facts: &ash_core::ToolExecutionFacts,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_request(call, cancellation, &self.browser_for(facts)?)
+        let (browser, session) = self.browser_for(facts)?;
+        self.execute_request(call, cancellation, &browser, &session)
     }
 
     fn execute_streaming_with_facts(
@@ -440,8 +483,8 @@ impl ToolService for BrowserToolService {
         interactions: Arc<dyn ash_core::ToolInteractionService>,
         _: &mut dyn ash_core::ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let lease = self
-            .browser_for(facts)?
+        let (browser, session) = self.browser_for(facts)?;
+        let lease = browser
             .with_network_policy(
                 crate::network_policy::ExecutionNetworkPolicy::new(
                     self.prepare(call)?,
@@ -450,7 +493,7 @@ impl ToolService for BrowserToolService {
                 cancellation,
             )
             .map_err(browser_error)?;
-        self.execute_request(call, cancellation, &lease.host)
+        self.execute_request(call, cancellation, &lease.host, &session)
     }
 }
 
@@ -458,13 +501,15 @@ impl BrowserToolService {
     fn browser_for(
         &self,
         facts: &ash_core::ToolExecutionFacts,
-    ) -> Result<crate::browser_host::BrowserHost, CoreError> {
+    ) -> Result<(crate::browser_host::BrowserHost, ash_protocol::SessionId), CoreError> {
         let identity = facts
             .execution_identity()
             .ok_or_else(|| CoreError::Execution("Browser tools require a task identity".into()))?;
-        self.browser
+        let browser = self
+            .browser
             .for_turn(identity.thread_id(), identity.turn_id())
-            .map_err(browser_error)
+            .map_err(browser_error)?;
+        Ok((browser, identity.session_id().clone()))
     }
 
     fn execute_request(
@@ -472,8 +517,32 @@ impl BrowserToolService {
         call: &ToolCall,
         cancellation: &CancellationToken,
         browser: &dyn BrowserCapability,
+        session: &ash_protocol::SessionId,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let output = match self.materialize(call)? {
+            BrowserToolRequest::CanvasList => {
+                json!({ "canvases": browser.list_canvases(session, cancellation).map_err(browser_error)?.map(|definitions| definitions.into_iter().map(|definition| json!({ "extension_id": definition.id.extension_id, "canvas_id": definition.id.canvas_id, "display_name": definition.display_name, "description": definition.description, "requires_input": definition.requires_input })).collect::<Vec<_>>()) })
+            }
+            BrowserToolRequest::CanvasOpen(arguments) => {
+                let created = browser
+                    .create_target(
+                        CreateBrowserTargetRequest {
+                            url: "about:blank".into(),
+                            canvas: Some(core_api::BrowserCanvasPresentation {
+                                session_id: session.clone(),
+                                instance_id: arguments.instance_id,
+                                title: arguments.canvas_id.clone(),
+                                definition: Some(core_api::BrowserCanvasDefinitionId {
+                                    extension_id: arguments.extension_id,
+                                    canvas_id: arguments.canvas_id,
+                                }),
+                            }),
+                        },
+                        cancellation,
+                    )
+                    .map_err(browser_error)?;
+                json!({ "target_id": created.target_id.0 })
+            }
             BrowserToolRequest::List => {
                 json!({ "pages": browser.list_targets(cancellation).map_err(browser_error)?.into_iter().map(|page| json!({ "target_id": page.target_id.0, "url": page.url, "title": page.title, "loading": page.loading })).collect::<Vec<_>>() })
             }
@@ -482,9 +551,15 @@ impl BrowserToolService {
                     .perform(action, cancellation)
                     .map_err(browser_error)?,
             ),
-            BrowserToolRequest::Open { url } => {
+            BrowserToolRequest::Open { url, canvas } => {
+                let canvas = canvas.map(|canvas| core_api::BrowserCanvasPresentation {
+                    session_id: session.clone(),
+                    instance_id: canvas.instance_id,
+                    title: canvas.title,
+                    definition: None,
+                });
                 let created = browser
-                    .create_target(CreateBrowserTargetRequest { url }, cancellation)
+                    .create_target(CreateBrowserTargetRequest { url, canvas }, cancellation)
                     .map_err(browser_error)?;
                 json!({ "target_id": created.target_id.0 })
             }
@@ -653,10 +728,13 @@ impl ActionPolicyService for BrowserToolPolicy {
 }
 
 enum BrowserToolRequest {
+    CanvasList,
+    CanvasOpen(RegisteredCanvasArguments),
     List,
     Interaction(BrowserAction),
     Open {
         url: String,
+        canvas: Option<CanvasArguments>,
     },
     Observe {
         target_id: BrowserTargetId,
@@ -698,7 +776,7 @@ enum BrowserToolRequest {
 impl BrowserToolRequest {
     fn target_id(&self) -> Option<&BrowserTargetId> {
         match self {
-            Self::Open { .. } | Self::List => None,
+            Self::Open { .. } | Self::List | Self::CanvasList | Self::CanvasOpen(_) => None,
             Self::Interaction(action) => Some(match action {
                 BrowserAction::Cdp { target_id, .. }
                 | BrowserAction::Navigate { target_id, .. }
@@ -725,6 +803,9 @@ impl BrowserToolRequest {
     }
 
     fn capability_scope(&self) -> &str {
+        if matches!(self, Self::CanvasList | Self::CanvasOpen(_)) {
+            return "conversation-canvas";
+        }
         if matches!(self, Self::List) {
             return "browser-page-list";
         }
@@ -734,6 +815,11 @@ impl BrowserToolRequest {
 
     fn summary(&self) -> String {
         match self {
+            Self::CanvasList => "list Canvas types available to this conversation".into(),
+            Self::CanvasOpen(arguments) => format!(
+                "open Canvas {} from {}",
+                arguments.canvas_id, arguments.extension_id
+            ),
             Self::List => "list browser pages available to this task".into(),
             Self::Interaction(BrowserAction::Cdp {
                 target_id,
@@ -743,7 +829,10 @@ impl BrowserToolRequest {
                 "operate browser target {}",
                 self.target_id().expect("interaction has a target").0
             ),
-            Self::Open { url } => format!("open browser target at {url}"),
+            Self::Open { url, canvas } => canvas.as_ref().map_or_else(
+                || format!("open browser target at {url}"),
+                |canvas| format!("open Canvas {} at {url}", canvas.title),
+            ),
             Self::Observe { target_id, .. } => format!("observe browser target {}", target_id.0),
             Self::Navigate { target_id, url } => {
                 format!("navigate browser target {} to {url}", target_id.0)
@@ -763,6 +852,30 @@ impl BrowserToolRequest {
 #[serde(deny_unknown_fields)]
 struct OpenArguments {
     url: String,
+    canvas: Option<CanvasArguments>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CanvasArguments {
+    instance_id: String,
+    title: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RegisteredCanvasArguments {
+    extension_id: String,
+    canvas_id: String,
+    instance_id: String,
+}
+
+fn valid_canvas_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 #[derive(Deserialize)]

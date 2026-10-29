@@ -69,6 +69,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly canvases: readonly { readonly id: string; readonly displayName: string; readonly description: string; readonly requiresInput: boolean; }[];
 		readonly keybindings: readonly IKeybindingRule[];
 		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
 		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
@@ -141,6 +142,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			canvases: parseCanvases(contributes.canvases),
 			imageEditors: parseImageEditors(contributes.imageEditors),
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
 			debugVisualizers: parseDebugVisualizers(contributes.debugVisualizers),
@@ -711,4 +713,17 @@ function parseImageEditors(value: unknown): ExtensionManifest['contributes']['im
 		if (entry.accessibilityHelp !== undefined && (typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384)) throw new TypeError('Invalid image editor accessibility help');
 		return Object.freeze({ accessibilityHelp: entry.accessibilityHelp as string ?? '', id, displayName: requiredString(entry.displayName, 'image editor name', 256), ...(entry.default === undefined ? {} : { default: entry.default as boolean }) });
 	}));
+}
+
+function parseCanvases(value: unknown): ExtensionManifest['contributes']['canvases'] {
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 64) { throw new TypeError('Invalid Canvas declarations'); }
+	const ids = new Set<string>();
+	return value.map(item => {
+		const entry = record(item, 'Canvas declaration');
+		const id = requiredString(entry.id, 'Canvas id', 128);
+		if (!/^[A-Za-z0-9._-]+$/.test(id) || ids.has(id) || entry.requiresInput !== undefined && typeof entry.requiresInput !== 'boolean') { throw new TypeError('Invalid Canvas declaration'); }
+		ids.add(id);
+		return Object.freeze({ id, displayName: requiredString(entry.displayName, 'Canvas name', 256), description: entry.description === undefined ? '' : boundedText(entry.description, 'Canvas description', 4096), requiresInput: entry.requiresInput === true });
+	});
 }

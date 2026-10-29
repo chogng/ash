@@ -12,6 +12,125 @@ use std::sync::Mutex;
 use std::thread;
 
 #[test]
+fn canvas_registry_requests_use_the_bound_connection_and_exact_session_thread() {
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let host = Arc::new(host);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 4,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    for definitions in [
+        json!(null),
+        json!([]),
+        json!([{"id":{"extensionId":"fixture","canvasId":"board"},"displayName":"Board","description":"","requiresInput":false}]),
+    ] {
+        let worker_host = Arc::clone(&host);
+        let worker = thread::spawn(move || {
+            worker_host.list_canvases(
+                &ash_protocol::SessionId::new("source-session").unwrap(),
+                &CancellationSource::new().token(),
+            )
+        });
+        let request = next_request(&outbound);
+        assert_eq!(request["method"], "browser/canvases/list");
+        assert_eq!(
+            request["params"],
+            json!({"sessionId":"source-session","threadId":"browser-thread"})
+        );
+        host.clients
+            .handle_response(
+                7,
+                json!({"jsonrpc":"2.0","id":request["id"],"result":{"canvases":definitions}}),
+            )
+            .unwrap();
+        let result = worker.join().unwrap().unwrap();
+        assert_eq!(
+            result.as_ref().map(Vec::len),
+            definitions.as_array().map(Vec::len)
+        );
+    }
+}
+
+#[test]
+fn canvas_creation_carries_its_session_and_only_reuses_the_exact_target_owner() {
+    let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    host.owner = Some(7);
+    let host = Arc::new(host);
+    let outbound = NotificationQueue::default();
+    host.register(
+        7,
+        ClientBrowserCapability {
+            version: 4,
+            observe: true,
+            input: true,
+        },
+        outbound.clone(),
+    );
+    for _ in 0..2 {
+        let worker_host = Arc::clone(&host);
+        let worker = thread::spawn(move || {
+            worker_host.create_target(
+                CreateBrowserTargetRequest {
+                    url: "https://example.test/canvas".into(),
+                    canvas: Some(core_api::BrowserCanvasPresentation {
+                        session_id: ash_protocol::SessionId::new("source-session").unwrap(),
+                        instance_id: "preview".into(),
+                        title: "Preview".into(),
+                        definition: None,
+                    }),
+                },
+                &CancellationSource::new().token(),
+            )
+        });
+        let request = next_request(&outbound);
+        assert_eq!(request["params"]["threadId"], "browser-thread");
+        assert_eq!(request["params"]["canvas"]["sessionId"], "source-session");
+        host.clients
+            .handle_response(
+                7,
+                json!({"jsonrpc":"2.0", "id":request["id"], "result":{"targetId":"canvas-page"}}),
+            )
+            .unwrap();
+        assert_eq!(worker.join().unwrap().unwrap().target_id.0, "canvas-page");
+    }
+    assert_eq!(host.state.lock().unwrap().target_owners.len(), 1);
+    let mut other = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
+    other.state = Arc::clone(&host.state);
+    other.clients = Arc::clone(&host.clients);
+    other.owner = Some(7);
+    other.thread_id = Some(ash_protocol::ThreadId::new("other-thread").unwrap());
+    let worker = thread::spawn(move || {
+        other.create_target(
+            CreateBrowserTargetRequest {
+                url: "https://example.test/canvas".into(),
+                canvas: Some(core_api::BrowserCanvasPresentation {
+                    session_id: ash_protocol::SessionId::new("other-session").unwrap(),
+                    instance_id: "preview".into(),
+                    title: "Preview".into(),
+                    definition: None,
+                }),
+            },
+            &CancellationSource::new().token(),
+        )
+    });
+    let request = next_request(&outbound);
+    host.clients
+        .handle_response(
+            7,
+            json!({"jsonrpc":"2.0", "id":request["id"], "result":{"targetId":"canvas-page"}}),
+        )
+        .unwrap();
+    assert!(worker.join().unwrap().is_err());
+}
+
+#[test]
 fn browser_cdp_requires_a_grant_and_registers_and_releases_created_pages() {
     let mut host = browser_host(Arc::new(Mutex::new(ResourceStore::default())));
     host.owner = Some(7);
@@ -125,6 +244,7 @@ fn browser_cdp_requires_a_grant_and_registers_and_releases_created_pages() {
     assert!(matches!(
         host.create_target(
             CreateBrowserTargetRequest {
+                canvas: None,
                 url: "about:blank".into()
             },
             &CancellationSource::new().token()
@@ -156,6 +276,7 @@ fn terminal_errors_release_registration_without_sending_cancellation() {
         let worker = thread::spawn(move || {
             worker_host.create_target(
                 CreateBrowserTargetRequest {
+                    canvas: None,
                     url: "about:blank".into(),
                 },
                 &CancellationSource::new().token(),
@@ -192,6 +313,7 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     let create = thread::spawn(move || {
         create_host.create_target(
             CreateBrowserTargetRequest {
+                canvas: None,
                 url: "https://example.test/".into(),
             },
             &CancellationSource::new().token(),
@@ -337,6 +459,7 @@ fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
     let request = thread::spawn(move || {
         request_host.create_target(
             CreateBrowserTargetRequest {
+                canvas: None,
                 url: "about:blank".into(),
             },
             &CancellationSource::new().token(),
@@ -373,6 +496,7 @@ fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     let request = thread::spawn(move || {
         request_host.create_target(
             CreateBrowserTargetRequest {
+                canvas: None,
                 url: "about:blank".into(),
             },
             &token,
@@ -676,6 +800,7 @@ fn browser_network_requests_use_exact_tool_authority_and_fail_closed_after_relea
         thread::spawn(move || {
             lease.host.create_target(
                 CreateBrowserTargetRequest {
+                    canvas: None,
                     url: "https://allowed.test/".into(),
                 },
                 &CancellationSource::new().token(),

@@ -379,6 +379,16 @@ use crate::protocol::automation::AutomationWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserBinaryPayload;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasDefinition;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasDefinitionId;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasPresentation;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserCdpOperationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserCloseParams;
@@ -5893,6 +5903,7 @@ host_methods! {
     TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
     TextDocumentRelease => "textDocument/release" { params: TextDocumentReleaseParams, response: (), },
     BrowserList => "browser/list" { params: BrowserListParams, response: BrowserListResult, },
+    BrowserCanvasList => "browser/canvases/list" { params: BrowserCanvasListParams, response: BrowserCanvasListResult, },
     BrowserCreate => "browser/create" {
         params: BrowserCreateParams,
         response: BrowserCreateResult,
@@ -6463,6 +6474,11 @@ typescript_bindings! {
     BrowserListResult,
     BrowserPageSummary,
     BrowserCreateParams,
+    BrowserCanvasPresentation,
+    BrowserCanvasDefinition,
+    BrowserCanvasDefinitionId,
+    BrowserCanvasListParams,
+    BrowserCanvasListResult,
     BrowserNetworkAuthorizeParams,
     BrowserNetworkAuthorizeResult,
     BrowserSharingSetParams,

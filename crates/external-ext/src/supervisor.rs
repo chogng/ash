@@ -518,6 +518,7 @@ impl ExtensionHostSupervisor {
                             | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
                             | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
                             | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. })
+                            || matches!(&registration.kind, external_ext_protocol::RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1")
                     }).map(|registration| registration.registration_id.clone())
                 );
                 state.registrations = registrations;
@@ -834,11 +835,17 @@ impl SupervisorInner {
                     .terminal_providers
                     .iter()
                     .chain(&event.tree_providers)
+                    .chain(&event.canvas_providers)
                     .collect::<Vec<_>>()
             })
             .unwrap_or_else(|| state.registrations.iter().collect());
         let mut added = Vec::new();
-        for registration in event.terminal_providers.iter().chain(&event.tree_providers) {
+        for registration in event
+            .terminal_providers
+            .iter()
+            .chain(&event.tree_providers)
+            .chain(&event.canvas_providers)
+        {
             if previous.contains(&registration) {
                 continue;
             }
@@ -886,13 +893,14 @@ impl SupervisorInner {
                         | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
                         | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
                         | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. }
-                )
+                ) && !matches!(&registration.kind, external_ext_protocol::RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1")
             })
             .cloned()
             .collect::<Vec<_>>();
         registrations.extend(event.speech_providers.iter().cloned());
         registrations.extend(event.terminal_providers.iter().cloned());
         registrations.extend(event.tree_providers.iter().cloned());
+        registrations.extend(event.canvas_providers.iter().cloned());
         let snapshot = ActivateResult { registrations };
         snapshot
             .validate(
@@ -933,6 +941,7 @@ impl SupervisorInner {
                 .iter()
                 .chain(&event.terminal_providers)
                 .chain(&event.tree_providers)
+                .chain(&event.canvas_providers)
                 .cloned()
                 .collect(),
         }

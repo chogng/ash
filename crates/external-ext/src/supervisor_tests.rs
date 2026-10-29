@@ -158,6 +158,7 @@ impl ExtensionHostProcess for TestProcess {
                         context,
                         revision: 1,
                         terminal_providers: vec![],
+                        canvas_providers: vec![],
                         tree_providers: vec![],
                         speech_providers: vec![RegistrationDescriptor {
                             registration_id: "starting.speech".into(),
@@ -173,6 +174,7 @@ impl ExtensionHostProcess for TestProcess {
                             context,
                             revision: 2,
                             terminal_providers: vec![],
+                            canvas_providers: vec![],
                             tree_providers: vec![],
                             speech_providers: vec![],
                         })
@@ -699,6 +701,7 @@ fn dynamic_speech_registry_is_admitted_ordered_and_fenced_to_its_activation() {
         revision,
         speech_providers,
         terminal_providers: vec![],
+        canvas_providers: vec![],
         tree_providers: vec![],
     };
     handler(event(HostEventContext::new(1, 9), 2, vec![speech.clone()])).unwrap();
@@ -786,6 +789,7 @@ fn starting_speech_updates_keep_the_observed_generation_after_the_activate_recei
             context: HostEventContext::new(1, 9),
             revision: 3,
             terminal_providers: vec![],
+            canvas_providers: vec![],
             tree_providers: vec![],
             speech_providers: vec![RegistrationDescriptor {
                 registration_id: "replacement".into(),
@@ -836,6 +840,7 @@ fn process_registration_callback_does_not_retain_its_supervisor() {
         context: HostEventContext::new(1, 9),
         revision: 99,
         terminal_providers: vec![],
+        canvas_providers: vec![],
         tree_providers: vec![],
         speech_providers: vec![],
     })
@@ -898,6 +903,7 @@ fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority
         revision,
         speech_providers: vec![],
         terminal_providers,
+        canvas_providers: vec![],
         tree_providers: vec![],
     };
     handler(event(HostEventContext::new(1, 9), 1, providers.clone())).unwrap();
@@ -932,4 +938,45 @@ fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority
             .is_err()
     );
     denied.shutdown().unwrap();
+}
+
+#[test]
+fn dynamic_canvas_registrations_retire_without_reviving_old_callback_handles() {
+    let launcher = Arc::new(TestLauncher::default());
+    let host = supervisor_with_capabilities(
+        launcher.clone(),
+        Arc::new(TestAuthority::authorized()),
+        vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::DataChannel,
+        ],
+    );
+    host.start().unwrap();
+    let process = launcher.processes.lock().unwrap()[0].clone();
+    let handler = process
+        .registration_handler
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    let canvas = RegistrationDescriptor {
+        registration_id: "canvas.1".into(),
+        kind: RegistrationKind::DataChannel {
+            channel_id: "canvas.provider.v1".into(),
+        },
+    };
+    let event = |revision, canvas_providers| crate::ExtensionHostRegistrationEvent {
+        context: HostEventContext::new(1, 9),
+        revision,
+        speech_providers: vec![],
+        tree_providers: vec![],
+        terminal_providers: vec![],
+        canvas_providers,
+    };
+    handler(event(1, vec![canvas.clone()])).unwrap();
+    assert!(host.snapshot().registrations.contains(&canvas));
+    handler(event(2, vec![])).unwrap();
+    assert!(!host.snapshot().registrations.contains(&canvas));
+    assert!(handler(event(3, vec![canvas])).is_err());
+    host.shutdown().unwrap();
 }

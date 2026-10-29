@@ -1,0 +1,26 @@
+.ash-canvas-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	padding-block: var(--ash-spacing-size40);
+}
+
+.ash-canvas-pills[hidden] {
+	display: none;
+}
+
+.ash-canvas-pill {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	align-items: center;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-canvas-pill > :first-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

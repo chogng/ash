@@ -2,6 +2,14 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Event } from '../../../../base/common/event.js';
+import type { IObservable } from '../../../../base/common/observable.js';
+import type { URI } from '../../../../base/common/uri.js';
+
+export interface ISessionEditorWorkingSetState {
+	readonly owner: { readonly sessionResource: URI; readonly chatResource: URI | undefined; } | undefined;
+	readonly restoring: boolean;
+	readonly applying: boolean;
+}
 
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
 export interface ISessionsEntry {
@@ -23,6 +31,9 @@ export interface ISessionsEntry {
 }
 
 export interface ISessionsLayoutService extends IDisposable {
+	readonly editorWorkingSetState: IObservable<ISessionEditorWorkingSetState>;
+	retainEditor(input: IResourceEditorInput): IDisposable;
+	suppressEditorAutoVisibility(): IDisposable;
 	readonly newSessionCommand?: string;
 	readonly conversationVisible: boolean;
 	readonly onDidChangeConversationVisibility: Event<void>;

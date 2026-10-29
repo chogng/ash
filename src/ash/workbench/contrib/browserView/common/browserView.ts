@@ -85,13 +85,18 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	private stateRevision = 0;
 	private isClosed = false;
 
-	constructor(private readonly initialInfo: IBrowserViewInfo, @IBrowserViewService private readonly service: IBrowserViewService) {
+	constructor(private viewInfo: IBrowserViewInfo, @IBrowserViewService private readonly service: IBrowserViewService) {
 		super();
-		this.currentState = initialInfo.state;
+		this.currentState = viewInfo.state;
 		this._register(service.onDidEvent(event => {
 			const id = event.type === 'created' ? event.info.id : event.type === 'stateChanged' ? event.state.targetId : event.targetId;
 			if (id !== this.id || this.isClosed) { return; }
-			if (event.type === 'stateChanged' && event.state.targetId === this.id) {
+			if (event.type === 'canvasOpened') {
+				this.viewInfo = event.info;
+				this.stateRevision++;
+				this.currentState = event.info.state;
+				this.stateChanges.fire(this.currentState);
+			} else if (event.type === 'stateChanged' && event.state.targetId === this.id) {
 				this.stateRevision++;
 				this.currentState = event.state;
 				this.stateChanges.fire(event.state);
@@ -103,9 +108,9 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		}));
 	}
 
-	public get id(): string { return this.initialInfo.id; }
+	public get id(): string { return this.viewInfo.id; }
 	public get state(): IBrowserViewState { return this.currentState; }
-	public get info(): IBrowserViewInfo { return { ...this.initialInfo, state: this.currentState }; }
+	public get info(): IBrowserViewInfo { return { ...this.viewInfo, state: this.currentState }; }
 
 	public async initialize(): Promise<void> {
 		// A later event must win over an earlier snapshot whose IPC response arrives after it.

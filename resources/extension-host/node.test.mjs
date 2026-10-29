@@ -1328,3 +1328,28 @@ test('image view SDK requires explicit host admission before registering an exec
 	assert.match(response.body.body.payload, /admitted imageEditor capability/);
 	assert.equal(h.registrations.some(entry => entry.kind === 'dataChannel'), false);
 });
+
+test('Canvas SDK uses the admitted registration, exact conversation, hydration and close lifecycle', async t => {
+	const h = await host(t, `
+const ash = require('@ash/sdk');
+exports.activate = context => {
+ const registration = ash.window.registerCanvasProvider('board', {
+  openCanvas(source) { return { url: 'http://localhost:9000/' + source.threadId, title: source.instanceId }; },
+  resolveCanvas() { return undefined; },
+  closeCanvas() {}
+ });
+ context.subscriptions.push(registration, ash.commands.register('test.node', () => registration.dispose()));
+};`, 'extension.cjs', ['command', 'dataChannel'], undefined, { manifest: { contributes: { commands: [{ command: 'test.node', title: 'Test' }], canvases: [{ id: 'board', displayName: 'Board' }] } } });
+	const registrationId = h.registrations.find(value => value.channelId === 'canvas.provider.v1').registrationId;
+	const invoke = (action, context = { sessionId: 'session-a', threadId: 'thread-a', instanceId: 'board-a' }) => h.request('invoke', {
+		extensionId: 'test.node', registrationId, operation: 'receiveData', payload: { data: { action, context } }, deadlineUnixMillis: Date.now() + 5000
+	}).result;
+	assert.deepEqual((await invoke('open')).body.body.payload, { state: 'ready', url: 'http://localhost:9000/thread-a', title: 'board-a' });
+	assert.deepEqual((await invoke('resolve')).body.body.payload, { state: 'pending' });
+	assert.equal((await invoke('open', { sessionId: 's', threadId: 't', instanceId: 'i', extensionId: 'forged' })).status, 'failure');
+	assert.deepEqual((await invoke('close')).body.body.payload, { state: 'closed' });
+	await h.invoke('test.node', []).result;
+	assert.deepEqual((await h.registrationEvent(1)).canvasProviders, []);
+	assert.equal((await invoke('open')).status, 'failure');
+	await h.request('shutdown').result;
+});

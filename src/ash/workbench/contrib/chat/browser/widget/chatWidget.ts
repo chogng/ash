@@ -85,6 +85,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	readonly element: HTMLElement;
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidHide = this.hidden.event;
+	private readonly visibilityChanged = this._register(new Emitter<void>());
+	readonly onDidChangeVisibility = this.visibilityChanged.event;
 	private readonly voiceSessionController: VoiceSessionController;
 	private readonly voiceWidget: AgentsVoiceWidget;
 	readonly model: TModel;
@@ -335,6 +337,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	setVisible(visible: boolean): void {
 		const wasVisible = this.visible;
 		this.element.hidden = !visible;
+		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
@@ -453,7 +456,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.inputPart.render(this.model.inputState);
+		this.inputPart.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
 
 	private renderHistoryStatus(): void {

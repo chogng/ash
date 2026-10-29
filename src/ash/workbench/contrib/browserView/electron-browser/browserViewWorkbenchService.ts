@@ -78,7 +78,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private async readInitialViews(): Promise<void> {
 		const views = await this.service.getBrowserViews();
 		this.assertNotDisposed();
-		for (const info of views) { this.acceptInfo(info); }
+		for (const info of views) { if (!info.canvas) { this.acceptInfo(info); } }
 		// Subscribe before the snapshot and replay everything received while it was in flight.
 		this.initialized = true;
 		for (const event of this.initialEvents.splice(0)) { this.acceptEvent(event); }
@@ -275,6 +275,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			this.permissionDialogs.delete(event.requestId);
 			handle?.item.cancel();
 		} else if (event.type === 'created') {
+			if (event.info.canvas) { return; }
 			const known = this.inputs.has(event.info.id);
 			const input = this.acceptInfo(event.info);
 			if (!known) {

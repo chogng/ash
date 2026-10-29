@@ -37,6 +37,9 @@ import { AccessibleViewRegistry } from '../../../../../../platform/accessibility
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { IInstantiationService } from "../../../../../../platform/instantiation/common/instantiation.js";
+import { derived, observableValue, type IReader } from '../../../../../../base/common/observable.js';
+import { ICanvasContextService } from '../../../../canvases/common/canvas.js';
+import { CanvasesPillControl } from '../../../../canvases/browser/canvasesPillControl.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../../platform/native/common/nativeHost.js';
 import type { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import type { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
@@ -194,6 +197,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly inlineActionsToolbar: WorkbenchToolBar | undefined;
 	protected readonly inputFooter: HTMLElement | undefined;
 	private readonly changesPill: ChatChangesPill;
+	private readonly canvasPills: CanvasesPillControl | undefined;
+	private readonly conversation = observableValue<ChatInputState['conversation']>(this, undefined);
 	private readonly secondaryToolbarContainer: HTMLElement | undefined;
 	private readonly footerChanged = this._register(new Emitter<void>());
 	private permissionWidget: PermissionPickerActionItem | undefined;
@@ -309,11 +314,23 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.changesPill = this._register(instantiationService.createInstance(ChatChangesPill, this.element, () => {
 			void this.runSecondaryAction(async () => { await this.delegate.openChanges?.(this.state.changesRevision); });
 		}, () => this.focus(), this.delegate.readWorkspaceChanges));
+		const canvasContexts = instantiationService.getOptional(ICanvasContextService);
+		if (canvasContexts) {
+			this.canvasPills = this._register(instantiationService.createInstance(CanvasesPillControl, this.element, derived((reader: IReader) => {
+				const conversation = this.conversation.read(reader);
+				return conversation ? canvasContexts.contexts.read(reader).find(context => context.owner.session.path.slice(1) === conversation.sessionId && context.owner.chat.path.slice(1) === conversation.threadId) : undefined;
+			}), () => this.focus()));
+		}
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 95, name: `chatAttachments-${type}-${createUuid()}`,
 				getProvider: () => {
 					const focused = this.element.ownerDocument.activeElement as HTMLElement | null;
+					if (focused && this.canvasPills?.domNode.contains(focused)) {
+						const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View ? this.canvasPills!.getAccessibleContent() : localize('canvas.pillHelp', 'Canvas buttons open interactive pages from this conversation. Use Tab to reach an Open Canvas or Close Canvas button, and Enter or Space to activate it. Close Canvas ends its page. Closing the editor tab only hides it; use its Canvas button or Open Canvas to reopen it. Canvas actions do not attach content to the message.'), () => focused.isConnected ? focused.focus() : this.focus(), AccessibilityVerbositySettingId.Chat);
+						provider.onDidChangeContent = this.canvasPills.onDidChangeContent;
+						return provider;
+					}
 					const footerFocused = focused && this.secondaryToolbarContainer?.contains(focused);
 					const changesFocused = focused && this.changesPill.domNode.contains(focused);
 					const referencePreview = focused?.closest<HTMLElement>('.ash-chat-context-reference-preview');
@@ -357,6 +374,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		if (!this.secondaryToolbarContainer) this.element.append(this.status);
 		this.element.append(this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
+		if (this.canvasPills) { this.element.insertBefore(this.canvasPills.domNode, this.changesPill.domNode); }
 		if (this.inputFooter) this.element.append(this.inputFooter);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
 		this.updateDictationHost();
@@ -889,6 +907,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.skillSelectors = state.skillSelectors;
 		}
 		this.state = state;
+		this.conversation.set(state.conversation, undefined);
 		this.changesPill.render(state.changes, this.delegate.openChanges !== undefined, state.changesScope, state.changesError);
 		this.renderStatus();
 		this.renderInteraction(state);

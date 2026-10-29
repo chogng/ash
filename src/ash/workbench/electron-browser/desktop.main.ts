@@ -69,6 +69,7 @@ import { IBrowserPasswordService } from '../../platform/browserView/common/brows
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
+import { IAgentHostCanvasCollection } from '../contrib/canvases/common/agentHostCanvas.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
@@ -173,7 +174,7 @@ export class DesktopMain extends Disposable {
 					}));
 					return hosts;
 				} : undefined,
-				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService)) : undefined,
+				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection)) : undefined,
 				createLogService: () => {
 					// The factory owns failure cleanup and transfers the logger to the Workbench.
 					this._store.delete(logger);

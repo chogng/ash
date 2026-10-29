@@ -174,6 +174,7 @@ export type BrowserViewEvent =
 	| { readonly type: 'selectionStopped'; readonly targetId: string; }
 	| { readonly type: 'networkRequested'; readonly targetId: string; readonly requestId: string; readonly networkToken: string; readonly url: string; readonly method: string; }
 	| { readonly type: 'created'; readonly info: IBrowserViewInfo; }
+	| { readonly type: 'canvasOpened'; readonly targetId: string; readonly info: IBrowserViewInfo; }
 	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[]; }
 	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string; }
 	| { readonly type: 'permissionRequestClosed'; readonly targetId: string; readonly requestId: string; }
@@ -209,6 +210,17 @@ export interface IBrowserViewCreateOptions {
 	readonly initialUrl: string;
 	readonly owner: IBrowserViewOwner;
 	readonly session: IBrowserViewSessionOptions;
+	readonly canvas?: IBrowserCanvasPresentation;
+}
+
+/** Live Canvas identity is independent of its temporary page URL. */
+export interface IBrowserCanvasPresentation {
+	readonly sessionId: string;
+	readonly threadId?: string;
+	readonly extensionId?: string;
+	readonly canvasId?: string;
+	readonly instanceId: string;
+	readonly title: string;
 }
 
 export type IBrowserViewOwner = { readonly type: 'user'; } | { readonly type: 'agent'; readonly sessionId: string; };
@@ -230,6 +242,7 @@ export type IBrowserViewSessionOptions =
 	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; };
 
 export interface IBrowserViewInfo {
+	readonly canvas?: IBrowserCanvasPresentation;
 	readonly remoteAuthority?: string;
 	readonly id: string;
 	readonly host: { readonly windowId: number; };
@@ -259,6 +272,8 @@ export interface IBrowserViewService {
 	updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void>;
 	getConsoleLogs(id: string): Promise<string>;
 	getSelectedText(id: string): Promise<string>;
+	/** Window-owned accessibility inspection grants no Agent control or network authority. */
+	getAccessibilityTree(id: string): Promise<string>;
 	findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void>;
 	stopFindInPage(id: string, keepSelection?: boolean): Promise<void>;
 	toggleElementSelection(id: string, enabled?: boolean, options?: IBrowserElementSelectionOptions): Promise<void>;
@@ -340,13 +355,30 @@ export function validateBrowserViewCreateRequest(
 	value: unknown,
 ): IBrowserViewCreateRequest {
 	const request = exactRecord(value, ['targetId', 'options'], 'browser view create request');
-	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options');
+	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options', ['canvas']);
 	const owner = validateBrowserViewOwner(options.owner);
 	const session = validateBrowserViewSessionOptions(options.session);
 	if (owner.type === 'agent' && (session.scope !== BrowserViewStorageScope.Agent || session.affinity !== owner.sessionId)) {
 		throw new Error('Agent browser storage must belong to its session');
 	}
-	return { targetId: validateTargetId(request.targetId), options: { initialUrl: normalizeBrowserViewUrl(options.initialUrl), owner, session } };
+	let canvas: IBrowserCanvasPresentation | undefined;
+	if (options.canvas !== undefined) {
+		const value = exactRecord(options.canvas, ['sessionId', 'instanceId', 'title'], 'Canvas presentation', ['threadId', 'extensionId', 'canvasId']);
+		if (typeof value.instanceId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(value.instanceId)
+			|| typeof value.sessionId !== 'string' || !value.sessionId.trim() || value.sessionId.length > 1024
+			|| typeof value.title !== 'string' || !value.title.trim() || value.title.length > 256
+			|| owner.type === 'user' && (session.scope !== BrowserViewStorageScope.Ephemeral || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 1024 || typeof value.extensionId !== 'string' || typeof value.canvasId !== 'string')
+			|| ['threadId', 'extensionId', 'canvasId'].some(key => value[key] !== undefined && (typeof value[key] !== 'string' || !(value[key] as string).trim() || (value[key] as string).length > 1024))) {
+			throw new TypeError('Invalid Canvas presentation');
+		}
+		canvas = {
+			sessionId: value.sessionId, instanceId: value.instanceId, title: value.title,
+			...(value.threadId === undefined ? {} : { threadId: value.threadId as string }),
+			...(value.extensionId === undefined ? {} : { extensionId: value.extensionId as string }),
+			...(value.canvasId === undefined ? {} : { canvasId: value.canvasId as string }),
+		};
+	}
+	return { targetId: validateTargetId(request.targetId), options: { initialUrl: normalizeBrowserViewUrl(options.initialUrl), owner, session, ...(canvas ? { canvas } : {}) } };
 }
 
 function validateBrowserViewOwner(value: unknown): IBrowserViewOwner {
@@ -505,6 +537,7 @@ function exactRecord(
 	value: unknown,
 	keys: readonly string[],
 	label: string,
+	optionalKeys: readonly string[] = [],
 ): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		throw new Error(`${label} must be an object`);
@@ -513,8 +546,8 @@ function exactRecord(
 	const actual = Object.keys(result).sort();
 	const expected = [...keys].sort();
 	if (
-		actual.length !== expected.length ||
-		actual.some((key, index) => key !== expected[index])
+		expected.some(key => !Object.hasOwn(result, key)) ||
+		actual.some(key => !expected.includes(key) && !optionalKeys.includes(key))
 	) {
 		throw new Error(`${label} must contain exactly: ${expected.join(", ")}`);
 	}

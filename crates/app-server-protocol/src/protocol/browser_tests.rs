@@ -1,8 +1,38 @@
 use super::BrowserConfigureParams;
+use super::BrowserCreateParams;
 use super::BrowserPerformActionDto;
 use super::BrowserPerformParams;
 use super::BrowserPerformResult;
 use serde_json::json;
+
+#[test]
+fn canvas_metadata_is_optional_and_never_supplies_the_owning_thread() {
+    let ordinary: BrowserCreateParams =
+        serde_json::from_value(json!({"threadId":"thread", "url":"https://example.test"})).unwrap();
+    assert!(ordinary.canvas.is_none());
+    let value = json!({"threadId":"thread", "url":"https://example.test", "canvas":{"sessionId":"session", "instanceId":"preview", "title":"Preview"}});
+    let canvas: BrowserCreateParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(canvas).unwrap(), value);
+    assert!(serde_json::from_value::<BrowserCreateParams>(json!({"threadId":"thread", "url":"https://example.test", "canvas":{"sessionId":"session", "instanceId":"preview", "title":"Preview", "threadId":"other"}})).is_err());
+}
+
+#[test]
+fn registered_canvas_metadata_and_unsettled_registry_round_trip_without_a_saved_url() {
+    let value = json!({"threadId":"thread","url":"about:blank","canvas":{"sessionId":"session","instanceId":"preview","title":"Board","definition":{"extensionId":"fixture","canvasId":"board"}}});
+    let params: BrowserCreateParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(params).unwrap(), value);
+    for canvases in [json!(null), json!([])] {
+        let value = json!({"canvases":canvases});
+        let result: super::BrowserCanvasListResult = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(result).unwrap(), value);
+    }
+    assert!(
+        serde_json::from_value::<super::BrowserCanvasDefinitionId>(
+            json!({"extensionId":"fixture","canvasId":"board","url":"https://secret.test"})
+        )
+        .is_err()
+    );
+}
 
 #[test]
 fn browser_protocol_preserves_cdp_parameters_and_created_target_identity() {

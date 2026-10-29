@@ -55,6 +55,7 @@ import { NativeWorkbenchStorageService } from '../../workbench/services/storage/
 import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
+import { IAgentHostCanvasCollection } from '../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
@@ -157,7 +158,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		workbench = sessions.add(await createSessionsWorkbench({
 			serviceCollection,
 			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.get(IUpdateService))) : undefined,
-			createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, services.get(IPlaywrightService), services.get(IMainProcessService), services.get(IConfigurationService)) : undefined,
+			createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, services.get(IPlaywrightService), services.get(IMainProcessService), services.get(IConfigurationService), services.get(IAgentHostCanvasCollection)) : undefined,
 			createTextDocumentHost: documentClient ? services => {
 				const editing = services.get(IChatEditingService);
 				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
@@ -196,6 +197,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.url',
 				'workbench.contrib.externalUriOpener',
 				'workbench.contrib.browserView',
+				'workbench.contrib.canvases',
+				'sessions.contrib.canvases',
 				'workbench.contrib.browserView.windowZoomSynchronizer',
 				'workbench.contrib.browserView.autoReload',
 				'workbench.contrib.sessionBrowserViewController',

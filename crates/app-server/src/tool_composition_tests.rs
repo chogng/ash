@@ -50,6 +50,43 @@ use super::combine_tool_ports;
 use super::combine_tool_ports_at_generation;
 use super::combine_tool_ports_at_generation_with_search;
 
+#[test]
+fn registered_canvas_actions_use_the_browser_host_policy_without_a_browser_name_prefix() {
+    let policy = super::CompositeActionPolicyService {
+        environment: None,
+        dynamic: None,
+        extension: None,
+        host: Some(Arc::new(crate::browser_tool::BrowserToolPolicy)),
+        application: None,
+        local: None,
+        mcp: None,
+        search_enabled: false,
+    };
+    let request = ActionReviewRequest::new(
+        ResolvedAction::new(
+            ActionDigest::from_canonical_bytes(b"canvas_open"),
+            ActionKind::BrowserInteraction,
+            "open registered Canvas",
+            CapabilitySet::new(vec![Capability::new(
+                CapabilityKind::UserInterface,
+                "conversation-canvas",
+            )]),
+        ),
+        ActionProvenance::new(ActionSource::BuiltInTool, "canvas_open"),
+        SandboxCompatibility::NotApplicable {
+            reason: "browser host".into(),
+        },
+        ActionPolicyRevision::new(crate::browser_tool::BROWSER_POLICY_REVISION),
+    );
+    assert!(matches!(
+        policy.decide(
+            &request,
+            &ash_async_utils::CancellationSource::new().token()
+        ),
+        Ok(ExecutionDecision::AskUser(_))
+    ));
+}
+
 struct FakeTools {
     category: Option<ash_protocol::ToolCategory>,
     tool_set: Option<&'static str>,

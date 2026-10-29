@@ -23,7 +23,7 @@ import { browserZoomFactors, browserZoomDefaultIndex } from '../common/browserVi
 export const IBrowserViewMainService = createServiceIdentifier<IBrowserViewMainService>('browserViewMainService');
 export interface IBrowserViewMainService extends IBrowserViewService {
 	tryGetBrowserView(id: string): BrowserView | undefined;
-	createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string): Promise<BrowserView>;
+	createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas']): Promise<BrowserView>;
 	createBrowserContext(threadId: string): string;
 	disposeBrowserContext(contextId: string, threadId: string): Promise<void>;
 	validateAgentAccess(id: string, sessionId: string): BrowserView;
@@ -57,6 +57,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 	}
 	public async getConsoleLogs(id: string): Promise<string> { return this.target(id).getConsoleLogs(); }
 	public getSelectedText(id: string): Promise<string> { return this.target(id).getSelectedText(); }
+	public getAccessibilityTree(id: string): Promise<string> { return this.target(id).getAccessibilityTree(); }
 	public async findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void> { this.target(id).findInPage(text, options); }
 	public async stopFindInPage(id: string, keepSelection?: boolean): Promise<void> { this.target(id).stopFindInPage(keepSelection); }
 	public async toggleElementSelection(id: string, enabled?: boolean, options?: IBrowserElementSelectionOptions): Promise<void> { this.target(id).toggleElementSelection(enabled, options); }
@@ -191,7 +192,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 		await context.session.electronSession.clearStorageData();
 		await context.session.electronSession.clearCache();
 	}
-	public createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string): Promise<BrowserView> {
+	public createTarget(url: string, sessionId: string, signal: AbortSignal, browserContextId?: string, canvas?: IBrowserViewCreateOptions['canvas']): Promise<BrowserView> {
 		const pages = [...this.targets].map(([, view]) => view);
 		const owned = pages.filter(view => { const owner = view.getInfo().owner; return owner.type === 'agent' && owner.sessionId === sessionId; }).length;
 		if (owned + this.creations.size >= 256) { throw new Error('BrowserTargetCapacityExceeded'); }
@@ -206,6 +207,7 @@ export class BrowserViewMainService extends Disposable implements IBrowserViewMa
 			initialUrl: url,
 			owner: { type: 'agent', sessionId },
 			session: { scope: BrowserViewStorageScope.Agent, affinity: affinity ?? sessionId },
+			...(canvas ? { canvas } : {}),
 		}, signal);
 	}
 	private sessionIdentity(storage: IBrowserViewCreateOptions['session'], pageId?: string): string {

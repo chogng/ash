@@ -12,7 +12,7 @@ let fullRegistrationSnapshots = false;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
 const dynamicTerminalRegistration = kind => ['terminalProfileProvider', 'terminalPty', 'terminalLinkProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
-const dynamicRegistration = kind => kind === 'speechProvider' || kind === 'treeDataProvider' || dynamicTerminalRegistration(kind);
+const dynamicRegistration = (kind, channelId) => kind === 'speechProvider' || kind === 'treeDataProvider' || kind === 'dataChannel' && channelId === 'canvas.provider.v1' || dynamicTerminalRegistration(kind);
 
 function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
@@ -32,6 +32,8 @@ function publishDynamicRegistrations() {
 				registrationId, kind,
 				...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}), ...(profileId ? { profileId, title } : {})
 			})),
+		canvasProviders: active.filter(value => value.kind === 'dataChannel' && value.channelId === 'canvas.provider.v1')
+			.map(({ registrationId, kind, channelId }) => ({ registrationId, kind, channelId })),
 	}));
 }
 
@@ -74,19 +76,19 @@ export class CancellationTokenSource {
 }
 
 function register(registration) {
-	if (phase !== 'activating' && !(phase === 'active' && dynamicRegistration(registration.kind) && registrationListener)) { throw new Error('Registrations must be created during activation'); }
+	if (phase !== 'activating' && !(phase === 'active' && dynamicRegistration(registration.kind, registration.channelId) && registrationListener)) { throw new Error('Registrations must be created during activation'); }
 	if (registrations.has(registration.registrationId)) { throw new Error(`Duplicate registration '${registration.registrationId}'`); }
 	registrations.set(registration.registrationId, registration);
-	if (dynamicRegistration(registration.kind)) publishDynamicRegistrations();
+	if (dynamicRegistration(registration.kind, registration.channelId)) publishDynamicRegistrations();
 	return Object.freeze({
 		dispose() {
 			if (registrations.get(registration.registrationId) === registration) {
 				registrations.delete(registration.registrationId);
-				if (dynamicRegistration(registration.kind) || fullRegistrationSnapshots) {
+				if (dynamicRegistration(registration.kind, registration.channelId) || fullRegistrationSnapshots) {
 					for (const source of invocations.values()) if (source.registration === registration) { try { source.cancel(); } catch { /* Revocation still retires the registration when an extension listener throws. */ } }
 				}
 				try { registration.disposeResources?.(); }
-				finally { if (dynamicRegistration(registration.kind) || fullRegistrationSnapshots) publishDynamicRegistrations(); }
+				finally { if (dynamicRegistration(registration.kind, registration.channelId) || fullRegistrationSnapshots) publishDynamicRegistrations(); }
 			}
 		}
 	});

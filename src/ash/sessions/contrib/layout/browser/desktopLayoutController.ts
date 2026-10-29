@@ -74,7 +74,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private get documentsVisible(): boolean { return this.context.isDocumentContent && this.layout.isPartVisible('editor'); }
 	public get hasDocumentEditors(): boolean { return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input))); }
 	public get supportsDetails(): boolean { return this.detailPanel.supportsActiveEditor; }
-	public get isRestoringEditors(): boolean { return this.restoring; }
+	public get isRestoringEditors(): boolean { return this.restoring || this.autoVisibilitySuppressions > 0; }
 
 	/** Settle the current session before capturing the document groups that the entry leaves behind. */
 	public async prepareContentChange(): Promise<void> {
@@ -120,7 +120,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	protected override shouldShowEditor(): boolean {
 		return !this.context.isSessionContent || (this.context.isDocumentContent && this.editors.visibleEditors.length > 0 && (this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)));
 	}
-	protected override isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.context.isChangingContent; }
+	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
 	protected override getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key, [this.pageGroupId]); }
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> {
 		await this.editor.applyWorkingSet(saved, { preserveFocus: true, preserveGroups: [this.pageGroupId] });

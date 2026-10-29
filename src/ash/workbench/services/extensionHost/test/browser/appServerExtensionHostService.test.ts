@@ -1819,6 +1819,18 @@ test('Remote extension cancellation and revocation cannot open a window', async 
 });
 
 
+test('Canvas demand activates the admitted DataChannel owner without requiring a running registration', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onDemand:dataChannel']));
+	api.activationResult = Promise.resolve(snapshot(2, 'acme.canvas', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	services.registerInstance(ITerminalGroupService, {} as ITerminalGroupService);
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	await services.get(IExtensionService).activateByEvent('onCanvas');
+	assert.deepEqual(api.activations.map(({ initialization, ...request }) => request), [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'capability', capability: 'dataChannel' } }]);
+});
+
 test('terminal link demand activates its exact dormant extension through the window owner', async () => {
 	const api = new FakeExtensionHostApi(dormantSnapshot(['onDemand:terminalLinkProvider']));
 	api.activationResult = Promise.resolve(snapshot(2, 'acme.links', [], '', [], 11));

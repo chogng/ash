@@ -26,6 +26,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
 import '../../electron-browser/playwrightWorkbenchService.js';
+import type { IAgentCanvasHost } from '../../../../../platform/agentHost/common/agentService.js';
 
 const targetId = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const options = { includeAccessibilityTree: true, includeDomSnapshot: false, includeScreenshot: false };
@@ -33,6 +34,45 @@ const observation = { targetId, url: 'https://example.test/', title: 'Shared pag
 
 suite('Workbench Playwright service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('registered Canvas requests resolve in the originating conversation and retain Agent network authority', async () => {
+		const calls: { command: string; arg: unknown; }[] = [];
+		const opens: unknown[] = [];
+		const requests: unknown[] = [];
+		const closes: unknown[] = [];
+		const definition = { id: { extensionId: 'fixture.extension', canvasId: 'board' }, displayName: 'Board', description: '', requiresInput: false };
+		using f = hostFixture(async (command, arg) => { calls.push({ command, arg }); return command === 'create' ? { targetId } : null; }, {
+			listCanvases: async (session, thread) => { assert.deepEqual([session, thread], ['source-session', 'source-thread']); return [definition]; },
+			openCanvasSource: async request => { opens.push(request); return { url: 'http://localhost:9000/board', title: 'Resolved board' }; },
+			closeCanvasSource: async (thread, target) => { closes.push([thread, target]); },
+			acceptCanvasOpen: (request, state) => { requests.push({ request, state }); },
+		});
+		await f.client.connect();
+		assert.deepEqual((await f.transport.request('browser/canvases/list', { sessionId: 'source-session', threadId: 'source-thread' })).result, { canvases: [definition] });
+		const canvas = { sessionId: 'source-session', instanceId: 'preview', title: 'board', definition: definition.id };
+		const result = await f.transport.request('browser/create', { threadId: 'source-thread', url: 'about:blank', canvas, networkToken: 'execution-network-grant' });
+		assert.deepEqual(result.result, { targetId });
+		assert.deepEqual(opens, [{ sessionId: 'source-session', threadId: 'source-thread', instanceId: 'preview', definition: definition.id }]);
+		assert.deepEqual((calls[0]!.arg as { params: unknown; }).params, { threadId: 'source-thread', url: 'http://localhost:9000/board', canvas: { ...canvas, title: 'Resolved board' }, networkToken: 'execution-network-grant' });
+		const states = requests as { state: { id: string; succeeded: boolean; }; }[];
+		assert.equal(states[0]!.state.id, states[1]!.state.id);
+		assert.deepEqual(states.map(value => value.state.succeeded), [false, true]);
+		await f.transport.request('browser/close', { threadId: 'source-thread', targetId });
+		assert.deepEqual(closes, [['source-thread', targetId]]);
+	});
+
+	test('an untrusted registered Canvas source cannot use privileged or plaintext remote navigation', async () => {
+		let creates = 0;
+		let url = 'file:///private/secret';
+		using f = hostFixture(async () => { creates++; return { targetId }; }, { openCanvasSource: async () => ({ url }), acceptCanvasOpen: () => { } } as unknown as IAgentCanvasHost);
+		await f.client.connect();
+		for (const source of ['file:///private/secret', 'http://example.test/', 'https://user:password@example.test/']) {
+			url = source;
+			const result = await f.transport.request('browser/create', { threadId: 'source-thread', url: 'about:blank', canvas: { sessionId: 'source-session', instanceId: 'preview', title: 'board', definition: { extensionId: 'fixture', canvasId: 'board' } } });
+			assert.match(JSON.stringify(result.error), /CanvasSourceDenied/);
+		}
+		assert.equal(creates, 0);
+	});
 
 	test('live settings revoke browser requests and advanced CDP preserves newly created page identity', async () => {
 		const calls: string[] = [];
@@ -183,7 +223,7 @@ function registrations(): ServiceCollection {
 	return new ServiceCollection(...descriptors);
 }
 
-function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>): DisposableStore & { readonly configuration: ConfigurationService; readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; } {
+function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>, canvases?: IAgentCanvasHost): DisposableStore & { readonly configuration: ConfigurationService; readonly playwright: IPlaywrightService; readonly transport: HostTransport; readonly client: AppServerProtocolClient; readonly events: Emitter<BrowserViewEvent>; readonly sharing: IServerChannel<string>; } {
 	const resources = new DisposableStore();
 	const events = resources.add(new Emitter<BrowserViewEvent>());
 	const services = resources.add(new InstantiationService(registrations()));
@@ -199,7 +239,7 @@ function hostFixture(call: (command: string, arg: unknown) => Promise<unknown>):
 	const transport = new HostTransport();
 	const client = new AppServerProtocolClient(transport);
 	resources.add(toDisposable(() => client.dispose()));
-	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService, configuration));
+	resources.add(registerAppServerBrowserHost(client, playwright, mainProcessService, configuration, canvases));
 	return Object.assign(resources, { configuration, playwright, transport, client, events, sharing: (mainProcessService as TestMainProcessService).rendererChannels.get('browserSharing')! });
 }
 

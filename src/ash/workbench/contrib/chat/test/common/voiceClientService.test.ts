@@ -22,7 +22,7 @@ test('Chat widget targeting belongs to one window and releases each registered f
 	using firstWindow = new ChatWidgetService();
 	using secondWindow = new ChatWidgetService();
 	const input = dom.window.document.querySelector('input')!;
-	const widget: IChatWidget = { domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false, onDidHide: Event.None, onDidChangeViewModel: Event.None, startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); } };
+	const widget: IChatWidget = { sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None, domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false, onDidHide: Event.None, onDidChangeViewModel: Event.None, startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); } };
 	using registration = firstWindow.register(widget);
 	input.focus();
 	assert.equal(firstWindow.lastFocusedWidget, widget);

@@ -219,6 +219,56 @@ Disposing the registration or retiring the extension removes the view and cancel
 in-flight requests. Nodes are bounded to 10,000 per provider, item text to 4,096
 characters, IDs to 1,024 characters and rename input to 32,768 characters.
 
+### Conversation Canvases
+
+Desktop extensions admitted with the `dataChannel` capability can register interactive
+HTTP/HTTPS pages with `window.registerCanvasProvider`. Declare each type in `package.json`:
+
+```json
+{
+  "ashCapabilities": ["dataChannel"],
+  "activationEvents": ["onDemand:dataChannel"],
+  "contributes": {
+    "canvases": [{ "id": "board", "displayName": "Board", "description": "Project board" }]
+  }
+}
+```
+
+JavaScript activation facts come from `package.json`. Local Plugins also declare the
+`dataChannel` capability in `editorExtensions[]`; their outer activation declaration
+uses `{ "type": "onDemand", "capability": "dataChannel" }`. Ash activates that owner
+when a Canvas consumer first lists types.
+
+```ts
+import { window, type CanvasContext, type ExtensionContext } from '@ash/sdk';
+
+export function activate(context: ExtensionContext) {
+  context.subscriptions.push(window.registerCanvasProvider('board', {
+    openCanvas(source: CanvasContext) {
+      return { url: `http://localhost:9000/board/${encodeURIComponent(source.threadId)}`, title: 'Board' };
+    }
+  }));
+}
+```
+
+Ash supplies `sessionId`, `threadId` and `instanceId` from the initiating conversation.
+Make `openCanvas` idempotent for that identity. Optional `resolveCanvas` returns the
+current source, `undefined` while it hydrates, or `null` when the instance has ended.
+An omitted resolver leaves an existing source unchanged; reconnect requires a fresh
+source confirmation. Fire `onDidChangeCanvases` when sources, titles, status or live
+membership change. `closeCanvas` handles explicit end requests; rejecting it keeps the
+page available for retry. Disposing a registration retires its pages. Callbacks receive
+the invocation's cancellation token, and results from retired incarnations are discarded.
+
+Set `requiresInput: true` on a declaration when its own extension workflow must supply
+input; such types are omitted from direct-open menus. The generic model tools
+`canvas_list` and `canvas_open` open types that need no input, using the current task's
+network authority and HTTPS or loopback HTTP. A user's explicit menu action uses an
+isolated user page. Source URLs never enter working-set persistence. Closing the editor
+tab hides a live page; Close Canvas or `browser_close` ends it. Add context runs the
+Canvas action without creating a message attachment. Native Canvas hosting is a Desktop
+capability; a remote provider must supply its own Canvas capability to participate.
+
 ### Product window metadata
 
 Declare `ashUiTargets` in an editor extension's `package.json` as `["ide"]`, `["agents"]`, or `["ide", "agents"]`. Package builders preserve it as `uiTargets` in the signed market `catalog.json`; local Plugin manifests use `uiTargets` directly. Marketplace, details and recommendations consume this declaration. Omission preserves an unknown audience for legacy packages and does not imply shared support. Recommendation rules and capability types cannot override it. This metadata is separate from OS/runtime compatibility and execution authorization.

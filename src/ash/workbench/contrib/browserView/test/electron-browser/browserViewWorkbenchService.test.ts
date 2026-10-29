@@ -34,6 +34,18 @@ const info: IBrowserViewInfo = {
 suite('Browser Workbench page lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('Canvas pages are excluded from ordinary browser inputs and automatic tabs', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		const canvasId = 'browser_target_223e4567-e89b-12d3-a456-426614174000';
+		const canvas = { ...info, id: canvasId, canvas: { sessionId: 'session-one', instanceId: 'preview', title: 'Preview' }, owner: { type: 'agent' as const, sessionId: 'thread-one' }, state: { ...info.state, targetId: canvasId } };
+		f.events.fire({ type: 'created', info: canvas });
+		f.events.fire({ type: 'canvasOpened', targetId: canvasId, info: canvas });
+		await Promise.resolve();
+		assert.equal(f.views.getKnownBrowserViews().has(canvasId), false);
+		assert.equal(f.opened.length, 0);
+	});
+
 	test('authentication uses translated masked inputs, defaults to no persistence and cancels retired requests', async () => {
 		const chinese = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
 		try {
@@ -306,7 +318,7 @@ function fixture() {
 		setContentVisibility: async () => { },
 		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
-		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getBrowserViews: async () => [f.info],

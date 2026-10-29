@@ -18,6 +18,16 @@ import {
 const options = { initialUrl: 'https://example.com/', owner: { type: 'user' as const }, session: { scope: BrowserViewStorageScope.Workspace as const } };
 const targetId = "browser_target_123e4567-e89b-12d3-a456-426614174000";
 
+test('Canvas creation validates the complete presentation and requires isolated Agent storage', () => {
+	const agent = { initialUrl: 'https://example.test/', owner: { type: 'agent', sessionId: 'thread-one' }, session: { scope: BrowserViewStorageScope.Agent, affinity: 'thread-one' } };
+	const canvas = { sessionId: 'session-one', instanceId: 'preview-1', title: 'Preview' };
+	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options: { ...agent, canvas } }).options, { ...agent, canvas });
+	for (const invalid of [{ ...canvas, instanceId: '../other' }, { ...canvas, title: ' ' }, { ...canvas, instanceId: 'a'.repeat(129) }, { ...canvas, source: 'https://private.test' }]) {
+		assert.throws(() => validateBrowserViewCreateRequest({ targetId, options: { ...agent, canvas: invalid } }));
+	}
+	assert.throws(() => validateBrowserViewCreateRequest({ targetId, options: { ...options, canvas } }), /Canvas/);
+});
+
 test("browser view validators admit secure and loopback navigation", () => {
 	assert.equal(
 		normalizeBrowserViewUrl("https://example.com/path"),
@@ -97,7 +107,7 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 		setContentVisibility: async () => { },
 		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
-		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { throw new Error('Sharing must pass through the backend'); },

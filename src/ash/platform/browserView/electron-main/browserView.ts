@@ -45,6 +45,7 @@ export class BrowserView extends Disposable {
 	private passwordTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordChoiceTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordFillVersion = 0;
+	private canvas: IBrowserViewInfo['canvas'];
 
 	private cancelPasswordChoice(): void {
 		this.passwordFillVersion++;
@@ -412,6 +413,16 @@ export class BrowserView extends Disposable {
 	private readonly consoleLogs: string[] = [];
 	private consoleBytes = 0;
 	public getConsoleLogs(): string { return this.consoleLogs.join('\n'); }
+	public getAccessibilityTree(): Promise<string> {
+		return this.runOperation(this.signal, async () => {
+			using attachment = this.debugger.acquire();
+			const tree = await raceCancellationError(this.debugger.sendCommand('Accessibility.getFullAXTree'), this.signal, 'BrowserTargetUnavailable');
+			if (!isRecord(tree) || !Array.isArray(tree.nodes)) { throw new Error('BrowserAccessibilityUnavailable'); }
+			const text = JSON.stringify(tree, null, 2);
+			if (text.length > 512 * 1024) { throw new Error('BrowserAccessibilityTooLarge'); }
+			return text;
+		});
+	}
 	public captureScreenshot(options: IBrowserViewCaptureScreenshotOptions = {}): Promise<VSBuffer> {
 		return this.runOperation(this.signal, async () => {
 			this.broadcastPreload('hideUI');
@@ -634,6 +645,7 @@ export class BrowserView extends Disposable {
 		this.session = options.session;
 		this.history = options.history;
 		this.creation = options.creation;
+		this.canvas = options.creation.canvas;
 		this.remoteAuthority = options.remoteAuthority;
 		this.window = options.window;
 		this.url = options.initialUrl;
@@ -909,7 +921,13 @@ export class BrowserView extends Disposable {
 	}
 
 	public getInfo(): IBrowserViewInfo {
-		return { id: this.id, host: { windowId: this.window.id }, owner: this.creation.owner, session: this.creation.session, remoteAuthority: this.remoteAuthority, state: this.getState() };
+		return { id: this.id, host: { windowId: this.window.id }, owner: this.creation.owner, session: this.creation.session, remoteAuthority: this.remoteAuthority, state: this.getState(), ...(this.canvas ? { canvas: this.canvas } : {}) };
+	}
+
+	/** A successful explicit open may reveal a previously dismissed Canvas tab. */
+	public canvasOpened(canvas: NonNullable<IBrowserViewInfo['canvas']>): void {
+		this.canvas = canvas;
+		this.emit({ type: 'canvasOpened', targetId: this.id, info: this.getInfo() });
 	}
 
 	getState(): IBrowserViewState {

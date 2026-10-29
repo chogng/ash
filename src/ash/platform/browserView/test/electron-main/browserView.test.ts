@@ -306,6 +306,37 @@ suite('Browser view ownership and operations', () => {
 		assert.throws(() => instantiation.createInstance(AppServerBrowserHost), /browserViewMainService/);
 	});
 
+	test('Canvas opens retain one page per Thread and instance and publish only successful explicit opens', async () => {
+		using f = fixture();
+		using host = f.createHost();
+		const canvas = { sessionId: 'session-one', instanceId: 'preview', title: 'Preview' };
+		const first = await host.create({ threadId: 'thread-one', url: 'https://example.test/first', canvas }, { signal: signal() });
+		const updated = await host.create({ threadId: 'thread-one', url: 'https://example.test/second', canvas: { ...canvas, title: 'Updated' } }, { signal: signal() });
+		const other = await host.create({ threadId: 'thread-two', url: 'https://example.test/other', canvas }, { signal: signal() });
+		assert.equal(updated.targetId, first.targetId);
+		assert.notEqual(other.targetId, first.targetId);
+		const pages = await f.manager.getBrowserViews();
+		assert.equal(pages.length, 2);
+		assert.deepEqual(pages.find(page => page.id === first.targetId)!.canvas, { sessionId: 'session-one', instanceId: 'preview', title: 'Updated' });
+		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
+		f.load = async () => { throw new Error('navigation failed'); };
+		await assert.rejects(host.create({ threadId: 'thread-one', url: 'https://example.test/failure', canvas }, { signal: signal() }), /navigation failed/);
+		assert.equal((await f.manager.getBrowserViews()).length, 2);
+		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
+	});
+
+	test('window accessibility inspection reads an unshared user page without granting Agent access', async () => {
+		using f = fixture();
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral } });
+		f.command = async method => { assert.equal(method, 'Accessibility.getFullAXTree'); return { nodes: [{ role: { value: 'button' }, name: { value: 'User control' } }] }; };
+		const channel = browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None });
+		assert.match(await channel.call('window:1', 'getAccessibilityTree', [id]) as string, /User control/);
+		assert.throws(() => f.manager.validateAgentAccess(id, 'thread-one'), /BrowserTargetAccessDenied/);
+		assert.equal(f.attached, false);
+		f.command = async () => ({ nodes: [{ name: { value: 'x'.repeat(512 * 1024) } }] });
+		await assert.rejects(channel.call('window:1', 'getAccessibilityTree', [id]), /BrowserAccessibilityTooLarge/);
+	});
+
 	test('the renderer channel validates requests, enforces Thread access and returns Main page state', async () => {
 		using f = fixture();
 		await f.create();

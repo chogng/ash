@@ -19,6 +19,9 @@ mod worktree;
 
 pub use browser::BrowserAction;
 pub use browser::BrowserActionResult;
+pub use browser::BrowserCanvasDefinition;
+pub use browser::BrowserCanvasDefinitionId;
+pub use browser::BrowserCanvasPresentation;
 pub use browser::BrowserCapability;
 pub use browser::BrowserCdpOperation;
 pub use browser::BrowserElementTarget;

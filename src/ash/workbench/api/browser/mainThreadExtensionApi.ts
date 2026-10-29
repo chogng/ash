@@ -1,4 +1,6 @@
 import { MainThreadImageEditors } from './mainThreadImageEditors.js';
+import { MainThreadCanvases } from './mainThreadCanvases.js';
+import { IAgentHostCanvasCollection } from '../../contrib/canvases/common/agentHostCanvas.js';
 import { MainThreadTreeViews } from './mainThreadTreeViews.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { canLog, isLogLevel, log, LogLevel } from '../../../platform/log/common/log.js';
@@ -132,6 +134,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
 	private readonly customEditors: MainThreadCustomEditors;
 	private imageEditors: MainThreadImageEditors | undefined;
+	private canvases: MainThreadCanvases | undefined;
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
 	private readonly statusbar: MainThreadStatusBar;
@@ -219,6 +222,11 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
 			case 'editorOperation':
+				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'canvasChanged') {
+					if (!this.canvases) { throw new Error('Canvas providers are unavailable'); }
+					await this.canvases.handleChange(operation.payload, source);
+					return { result: 'value', value: null };
+				}
 				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'jsonSchemaContributions') {
 					if (Object.keys(operation.payload).length !== 1) throw new TypeError('Invalid JSON schema contribution request');
 					return { result: 'value', value: this.configurationApi.getJsonSchemaContributions() };
@@ -383,6 +391,9 @@ export class MainThreadExtensionApi extends Disposable {
 		this.projectOutput(snapshot);
 		this.updateOutputLevels(snapshot);
 		this.speechApi.update(snapshot);
+		if (this.instantiation.getOptional(IAgentHostCanvasCollection) && (this.canvases || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'canvas.provider.v1')))) {
+			(this.canvases ??= this._register(this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis))).update(snapshot);
+		}
 		this.customEditors.update(snapshot);
 		if (this.imageEditors || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1'))) (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
 		this.diagnostics.update(snapshot);
@@ -410,6 +421,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.speechApi.clear();
 		this.customEditors.clear();
 		this.imageEditors?.clear();
+		this.canvases?.clear();
 		this.documents.clear();
 		this.configurationApi.clear();
 		this.workspaceApi.clear();

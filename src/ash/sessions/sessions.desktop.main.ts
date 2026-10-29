@@ -8,6 +8,7 @@ import { localize2 } from '../nls.js';
 import { ReloadWindowAction } from '../workbench/browser/actions/windowActions.js';
 import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
+import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
 import './contrib/chatgptweb/browser/chatGPTWeb.contribution.js';

@@ -526,6 +526,8 @@ pub struct ExtensionHostRegistrationEvent {
     pub terminal_providers: Vec<RegistrationDescriptor>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tree_providers: Vec<RegistrationDescriptor>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub canvas_providers: Vec<RegistrationDescriptor>,
 }
 
 impl ExtensionHostRegistrationEvent {
@@ -561,6 +563,16 @@ impl ExtensionHostRegistrationEvent {
                 "invalid dynamic tree registrations",
             ));
         }
+        if self.canvas_providers.iter().any(|registration| {
+            !matches!(&registration.kind, RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1")
+        }) {
+            return Err(validation::protocol_error("invalid dynamic Canvas registrations"));
+        }
+        validate_registrations(
+            &self.canvas_providers,
+            limits.maximum_registrations,
+            &[ExtensionCapability::DataChannel],
+        )?;
         validate_registrations(
             &self.tree_providers,
             limits.maximum_registrations,

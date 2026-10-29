@@ -131,6 +131,7 @@ suite('Desktop built-in Voice Mode command', () => {
 		owner.add(toDisposable(() => input.remove()));
 		let starts = 0;
 		const widget: IChatWidget & { visible: boolean; isTranscriptProgressActive: boolean; } = {
+			sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None,
 			domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false,
 			onDidHide: Event.None, onDidChangeViewModel: Event.None,
 			startVoiceConversation: async () => { starts++; },

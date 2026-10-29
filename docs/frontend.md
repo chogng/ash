@@ -176,6 +176,12 @@ Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时
 
 界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl/Cmd+L 返回地址栏。Agent 创建的目标也显示为页签；Renderer 重载接回现存页面，应用重启恢复用户页签与工作区登录。用户可向指定 Thread 分享页面并撤销，网站权限支持记忆和重置，远程 Session 在创建页面前配置 SSH SOCKS5。双语导航已通过 macOS Electron 验证；上游契约差异及网络隔离限制见 [浏览器能力](desktop-architecture.md#7-浏览器能力)。
 
+会话 Canvas 由 `workbench/contrib/canvases` 承载。Agent 可通过 `browser_open` 的 `canvas: { instance_id, title }` 参数打开交互页面，也可用 `canvas_list` 和 `canvas_open` 选择扩展注册的类型。后端从执行事实提供 Session 和 Thread，扩展只返回当前页面来源；模型打开的页面继续受当前工具执行的浏览器网络权限约束。Main 拥有原生页面及其成员身份，扩展拥有应用状态，CanvasService 只投影编辑器与呈现状态，普通浏览器贡献排除 Canvas。
+
+扩展通过 SDK `window.registerCanvasProvider` 和 `contributes.canvases` 声明类型，使用现有受监督 DataChannel 的 `canvas.provider.v1` 契约发现、打开、解析和关闭实例。定义加载失败或重连未完成时保留最近一次权威清单；旧 incarnation 的异步结果不能替换新来源。用户可从添加上下文、Canvas 按钮或 Agents Window 的 Add Tab 菜单打开页面，操作不修改草稿附件。手动打开使用窗口的用户导航权限与隔离的临时存储；模型打开使用 Agent 页面和原有任务网络策略。
+
+IDE 根据可见 Chat 控件识别归属，Agents Window 根据 Session／Chat 选择及布局范围识别归属，复用现有文档组和工作集。关闭标签只隐藏页面并保留页面内状态，元数据更新不会重新弹出用户关闭的标签；Close Canvas、`browser_close`、扩展撤销或权威会话删除才结束页面。工作集只保存当前窗口已接纳的版本化不透明身份，不保存 URL，冷启动不能凭旧数据重建页面。来源暂时未知时保留身份并隐藏旧内容，恢复等待工作集切换完成。Design／白板继续使用独立的空间画布和文档模型。当前 Canvas 的原生页面承载与扩展回调接入属于 Desktop 本地能力，远程 Provider 未声明支持时不借用本地注册表。
+
 ## iframe Webview
 
 `workbench/contrib/webview/browser/webview.ts` 提供统一的 `IWebviewService`，用于创建容器、登记存活实例和跟踪当前焦点；Markdown 预览、富文本编辑器和发布说明页共用该服务，创建者负责释放。内容在 `srcdoc` sandbox iframe 中运行，不包含 `allow-same-origin`；固定 CSP 禁止网络子资源、嵌套 frame 和表单提交。
