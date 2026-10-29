@@ -365,6 +365,51 @@ test.describe('SCM editor groups', () => {
 		await expect(tree).toBeFocused();
 	});
 
+	for (const [locale, untrackedChanges] of [['en', 'mixed'], ['zh-CN', 'separate']]) {
+		test(`SCM untracked files open without diff markers and retain staged comparisons in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }, testInfo) => {
+			const contents = 'export const first = 1;\nexport const second = 2;\n';
+			await writeFile(join(testWorkspace.directory, 'new.ts'), contents);
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({
+				...parseJsonc(settings.content) as Record<string, unknown>,
+				'git.untrackedChanges': untrackedChanges,
+			}), settings.revision);
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			const row = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 未跟踪的更改 的new.ts' : 'Open new.ts for Changes', exact: true });
+			const group = workbench.editors.groupAt(0);
+			const assertPlainFile = async () => {
+				await expect(row.locator('xpath=..').locator('.ash-scm-change-status')).toHaveText('U');
+				await row.click();
+				await expect(group.content.locator('.stanza-diff-editor:visible')).toHaveCount(0);
+				await group.editor.waitForEditorContents(text => text.trimEnd() === contents.trimEnd());
+				await workbench.quickaccess.runCommand('scm.quickDiff.next');
+				await expect(page.locator('.ash-quick-diff-peek')).toHaveCount(0);
+				await expect(group.editor.element.locator('.ash-quick-diff-gutter')).toHaveCount(0);
+			};
+			await assertPlainFile();
+			await testInfo.attach(`untracked-file-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			await row.hover();
+			await row.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? '暂存更改' : 'Stage Changes', exact: true }).click();
+			const staged = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 暂存的更改 的new.ts' : 'Open new.ts for Staged Changes', exact: true });
+			await staged.click();
+			await expect(group.content.locator('.stanza-diff-editor')).toBeVisible();
+			await expect(group.content.locator('.modified .stanza-diff-line-added')).toHaveCount(2);
+			await staged.hover();
+			await staged.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? '取消暂存更改' : 'Unstage Changes', exact: true }).click();
+			await assertPlainFile();
+			expect(await readFile(join(testWorkspace.directory, 'new.ts'), 'utf8')).toBe(contents);
+		});
+	}
+
 	test('Git Quick Diff opens its baseline and updates decorations for unsaved edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		await workbench.openExplorer();

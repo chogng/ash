@@ -105,6 +105,10 @@ impl GitRuntime {
             } else {
                 json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path})
             }
+        } else if group != "staged" && change.worktree_status == "untracked" {
+            // Untracked files have no index baseline. Open the live file rather
+            // than presenting every line as an insertion against an empty file.
+            json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path})
         } else {
             let comparison = if group == "staged" {
                 Comparison::Staged
@@ -366,6 +370,10 @@ impl GitRuntime {
         else {
             return Ok(Value::Null);
         };
+        // Without a tracked baseline there are no Git changes to decorate.
+        if change.worktree_status == "untracked" {
+            return Ok(Value::Null);
+        }
         let comparison = if change.worktree_status != "unmodified" {
             Comparison::Unstaged
         } else {
