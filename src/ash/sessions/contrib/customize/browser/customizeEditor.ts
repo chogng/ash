@@ -50,7 +50,7 @@ interface Card {
 	readonly id: string;
 	readonly name: string;
 	readonly description: string;
-	readonly metadata: string;
+	readonly metadata?: string;
 	readonly open: () => Promise<void>;
 }
 interface Catalog {
@@ -360,7 +360,6 @@ export class CustomizeEditorPane extends EditorPane {
 			return {
 				cards: snapshot.catalog.skills.map(skill => ({
 					id: JSON.stringify(skill.id), name: skill.name, description: getSkillSummary(skill),
-					metadata: [skill.metadata?.author, skill.enabled ? localize('customize.enabled', 'Enabled') : localize('customize.disabled', 'Disabled')].filter(Boolean).join(' · '),
 					open: () => this.openInput(new ExtensionsCapabilityInput({ kind: 'skill', source: skill.id.source, name: skill.id.name, sessionId })),
 				})),
 				note: snapshot.diagnostics.map(diagnostic => diagnostic.message).join('\n'),
@@ -434,7 +433,7 @@ export class CustomizeEditorPane extends EditorPane {
 		this.cardResources.clear();
 		this.grid.replaceChildren();
 		const query = this.search.value.trim().toLocaleLowerCase();
-		const cards = this.cards.filter(card => this.collection === 'discover' || `${card.name} ${card.description} ${card.metadata}`.toLocaleLowerCase().includes(query))
+		const cards = this.cards.filter(card => this.collection === 'discover' || `${card.name} ${card.description} ${card.metadata ?? ''}`.toLocaleLowerCase().includes(query))
 			.sort((left, right) => left.name.localeCompare(right.name) * (this.descending ? -1 : 1));
 		for (const card of cards) {
 			const article = h(this.grid.ownerDocument, 'article', { className: 'ash-customize-card' });
@@ -445,8 +444,12 @@ export class CustomizeEditorPane extends EditorPane {
 			const name = this.cardResources.add(new Button(content, { ...defaultButtonStyles, label: card.name, onClick: () => { void this.run(card.open); } }));
 			name.domNode.classList.add('ash-customize-card-name');
 			const description = h(this.grid.ownerDocument, 'p', { className: 'ash-customize-card-description' }, card.description);
-			const metadata = h(this.grid.ownerDocument, 'p', { className: 'ash-customize-card-metadata' }, card.metadata);
-			content.append(description, metadata);
+			content.append(description);
+			if (card.metadata) {
+				const metadata = h(this.grid.ownerDocument, 'p', { className: 'ash-customize-card-metadata' }, card.metadata);
+				content.append(metadata);
+				this.cardResources.add(this.hover.setupDelayedHover(metadata, { content: card.metadata }));
+			}
 			this.cardResources.add(this.hover.setupDelayedHover(description, { content: card.description }));
 			this.cardResources.add(this.hover.setupDelayedHover(name.domNode, { content: card.name }));
 			article.append(icon, content);

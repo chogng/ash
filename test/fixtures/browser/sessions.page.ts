@@ -89,7 +89,8 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 // Synthetic catalogs exercise the real Sessions composition without using a personal profile.
 if (new URL(location.href).searchParams.has('customize')) {
 	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
-		id: { source: 'fixture', name }, description: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
+		id: { source: 'fixture', name }, description: name === 'writing-guide' ? 'Reusable writing instructions.' : name === 'research-notes' ? 'Reusable research instructions.'
+			: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
 		metadata: { author: 'Ash fixtures' }, contentDigest: 'a'.repeat(64), enabled: true, compatible: true,
 	})) };
 	const summaries = ['Data explorer', 'Document studio', 'Team knowledge', 'Writing companion'].map((displayName, index) => ({
