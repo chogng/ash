@@ -6,8 +6,9 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { App } from 'electron/main';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter } from '../../../base/common/event.js';
 import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
-import type { UpdateCheckResult, UpdateReadyResult } from '../common/updateService.js';
+import type { UpdateCheckResult, UpdateReadyResult, UpdateState } from '../common/updateService.js';
 
 const MAX_OUTPUT_BYTES = 4096;
 const MAX_PACKAGE_BYTES = 4 * 1024 * 1024 * 1024;
@@ -23,12 +24,17 @@ interface StagedUpdate {
 
 /** Owns the installed Electron product's update process and installer handoff. */
 export class UpdateMainService extends AbstractDisposable {
+	private readonly stateChanges = new Emitter<UpdateState>();
+	readonly onDidChangeState = this.stateChanges.event;
 	private readonly children = new Set<ChildProcessWithoutNullStreams>();
 	private readonly checking = new Map<'latest' | 'stable', Promise<UpdateCheckResult>>();
 	private downloading: Promise<UpdateReadyResult> | undefined;
 	private lastAutomaticCheck = 0;
 	private staged: StagedUpdate | undefined;
 	private installing = false;
+	get state(): UpdateState {
+		return this.installing ? 'installing' : this.downloading ? 'downloading' : this.staged ? 'ready' : 'idle';
+	}
 
 	constructor(
 		private readonly prepareRestart: (version: string) => Promise<void>,
@@ -68,7 +74,11 @@ export class UpdateMainService extends AbstractDisposable {
 		if (!this.application.isPackaged) throw new Error('Desktop updates require an installed Ash application');
 		if (this.installing) throw new Error('An update is already being installed');
 		if (!this.downloading) {
-			this.downloading = this.download(policy).finally(() => { this.downloading = undefined; });
+			this.downloading = this.download(policy).finally(() => {
+				this.downloading = undefined;
+				if (!this.isDisposed) this.stateChanges.fire(this.state);
+			});
+			this.stateChanges.fire(this.state);
 		}
 		return this.downloading;
 	}
@@ -80,6 +90,7 @@ export class UpdateMainService extends AbstractDisposable {
 		const staged = this.staged;
 		if (!staged) throw new Error('No verified desktop update has been downloaded');
 		this.installing = true;
+		this.stateChanges.fire(this.state);
 		try {
 			await verifyStaged(staged);
 			await this.prepareRestart(staged.version);
@@ -88,11 +99,13 @@ export class UpdateMainService extends AbstractDisposable {
 			else throw new Error('Desktop installation is unavailable on this platform');
 		} catch (error) {
 			this.installing = false;
+			if (!this.isDisposed) this.stateChanges.fire(this.state);
 			throw error;
 		}
 	}
 
 	protected override disposeCore(): void {
+		this.stateChanges.dispose();
 		for (const child of this.children) child.kill();
 		this.children.clear();
 	}

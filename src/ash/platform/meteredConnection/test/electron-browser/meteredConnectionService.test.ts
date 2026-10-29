@@ -2,7 +2,7 @@ import type { NetworkInformation } from '../../browser/networkInformation.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import { Emitter } from '../../../../base/common/event.js';
+import { Emitter, Event as AshEvent } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { ConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
@@ -23,6 +23,7 @@ import { TestNotificationService } from '../../../../workbench/services/notifica
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
 import '../../../../workbench/contrib/update/electron-browser/update.contribution.js';
+import { IContextKeyService, ContextKeyService } from '../../../contextkey/browser/contextKeyService.js';
 
 class BrowserConnection extends EventTarget implements NetworkInformation {
 	saveData = false;
@@ -139,14 +140,15 @@ suite('Desktop metered connection renderer', () => {
 			_serviceBrand: undefined,
 			getChannel: () => ({
 				async call<T>(command: string): Promise<T> {
+					if (command === 'state') return 'idle' as T;
 					calls.push(command);
 					return undefined as T;
 				},
-				listen: () => { throw new Error('Unexpected update event'); },
+				listen: () => AshEvent.None,
 			}),
 			registerChannel() { },
 		});
-		const update = services.createInstance(ElectronUpdateService);
+		using update = services.createInstance(ElectronUpdateService);
 		const automatic = update.checkAutomatically();
 		await update.checkForUpdates();
 		await update.downloadUpdate();
@@ -163,12 +165,15 @@ suite('Desktop metered connection renderer', () => {
 			using networkChanges = new Emitter<boolean>();
 			using notifications = new TestNotificationService();
 			services.registerInstance(INotificationService, notifications);
+			using contextKeys = new ContextKeyService();
+			services.registerInstance(IContextKeyService, contextKeys);
 			services.registerInstance(IMeteredConnectionService, {
 				_serviceBrand: undefined, isConnectionMetered: true,
 				onDidChangeIsConnectionMetered: networkChanges.event,
 			});
 			let attempts = 0;
 			services.registerInstance(IUpdateService, {
+				state: 'idle', onDidChangeState: AshEvent.None,
 				async checkAutomatically() { attempts++; return undefined; },
 				async checkForUpdates() { throw new Error('Unexpected manual check'); },
 				async downloadUpdate() { throw new Error('Unexpected download'); },

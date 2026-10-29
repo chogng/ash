@@ -36,6 +36,37 @@ suite('Customize page', () => {
 		await expect(entry).toBeVisible();
 	});
 
+	test('keeps short and long skill descriptions at two lines without redundant metadata', async () => {
+		const { page } = browser;
+		const root = page.locator('.ash-customize');
+		await expect(root.locator('.ash-customize-card-metadata')).toHaveCount(0);
+		const description = root.locator('.ash-customize-card-description').first();
+		await description.hover();
+		await expect(page.getByRole('tooltip')).toHaveText((await description.textContent())!);
+		await page.keyboard.press('Escape');
+		for (const width of [1280, 760]) {
+			await page.setViewportSize({ width, height: 900 });
+			await expect(root).toHaveClass(width === 760 ? /narrow/ : /^(?!.*narrow)/);
+			const dimensions = await root.locator('.ash-customize-card').evaluateAll(cards => cards.map(card => {
+				const description = card.querySelector<HTMLElement>('.ash-customize-card-description')!;
+				return {
+					height: card.getBoundingClientRect().height,
+					descriptionHeight: description.getBoundingClientRect().height,
+					lineHeight: Number.parseFloat(getComputedStyle(description).lineHeight),
+					truncated: description.scrollHeight > description.clientHeight,
+				};
+			}));
+			for (const dimension of dimensions) {
+				expect(dimension.height).toBeCloseTo(dimensions[0].height, 1);
+				expect(dimension.descriptionHeight).toBeCloseTo(2 * dimension.lineHeight, 1);
+			}
+			expect(dimensions[0].truncated).toBe(true);
+			expect(dimensions[1].truncated).toBe(false);
+			expect(dimensions[2].truncated).toBe(false);
+			await page.screenshot({ path: browser.info.outputPath(`customize-cards-${width}.png`) });
+		}
+	});
+
 	test('switches categories and discovery, handles source failures, and opens package details', async () => {
 		const { page } = browser;
 		const root = page.locator('.ash-customize');
@@ -46,6 +77,7 @@ suite('Customize page', () => {
 		await root.getByRole('tab', { name: 'Skills', exact: true }).click();
 		await root.getByRole('button', { name: 'Discover', exact: true }).click();
 		await expect(root.locator('.ash-customize-card')).toHaveCount(4);
+		await expect(root.locator('.ash-customize-card-metadata')).toHaveText(Array(4).fill('Ash fixtures · 1.0.0'));
 		await expect(root.locator('.ash-customize-hero')).toBeVisible();
 		await expect(root.locator('.ash-customize-search > .ash-icon')).toHaveAttribute('data-ash-icon-id', 'search');
 		await expect(root.locator('.ash-customize-search > .ash-icon')).toHaveAttribute('aria-hidden', 'true');

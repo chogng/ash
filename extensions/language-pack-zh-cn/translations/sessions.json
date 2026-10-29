@@ -1,5 +1,9 @@
 {
   "ash": {
+    "sessions.update.downloading": "正在下载更新...",
+    "sessions.update.restart": "重启更新",
+    "sessions.update.restarting": "正在重启...",
+    "sessions.update.help": "更新下载完成后，账户上方会保留“重启更新”按钮。用 Tab 聚焦按钮，按 Enter 或空格安装更新并重启。",
     "sessions.list.rename": "重命名",
     "sessions.list.addToProject": "添加到项目",
     "sessions.list.moveToGroup": "移动到分组",

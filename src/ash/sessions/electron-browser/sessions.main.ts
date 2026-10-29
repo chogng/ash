@@ -5,7 +5,7 @@ import { IPolicyService } from '../../platform/policy/common/policy.js';
 import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
-import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
+import { IUpdateService } from '../../platform/update/common/updateService.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
@@ -156,7 +156,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		const hostColorScheme = await api.nativeHost.getOSColorScheme();
 		workbench = sessions.add(await createSessionsWorkbench({
 			serviceCollection,
-			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
+			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.get(IUpdateService))) : undefined,
 			createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, services.get(IPlaywrightService), services.get(IMainProcessService), services.get(IConfigurationService)) : undefined,
 			createTextDocumentHost: documentClient ? services => {
 				const editing = services.get(IChatEditingService);

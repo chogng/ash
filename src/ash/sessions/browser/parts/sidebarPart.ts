@@ -23,6 +23,12 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 import { IWorkbenchLayoutService } from '../../../workbench/services/layout/browser/layoutService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { isWeb } from '../../../base/common/platform.js';
+import { IUpdateService } from '../../../platform/update/common/updateService.js';
+import { IHoverService } from '../../../platform/hover/browser/hoverService.js';
+import { Button } from '../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
@@ -101,6 +107,7 @@ class TeamsNavigationView extends ViewPane {
 export class SidebarPart extends WorkbenchSidebarPart {
 	private readonly topActivityBarHost: HTMLDivElement;
 	private readonly bottomActivityBarHost: HTMLDivElement;
+	private readonly updateStatus: HTMLDivElement;
 	public get activityBarAccountHost(): HTMLElement { return this.bottomActivityBarHost; }
 	override get minimumWidth(): number { return isWeb ? 270 : 170; }
 	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
@@ -118,6 +125,9 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		@IThemeService themeService: IThemeService,
 		@IWorkbenchLayoutService layoutService: Pick<IWorkbenchLayoutService, 'getSideBarPosition'>,
 		@IConfigurationService configurationService: IConfigurationService,
+		@IUpdateService updateService: IUpdateService,
+		@IHoverService hoverService: IHoverService,
+		@INotificationService notifications: INotificationService,
 	) {
 		super(container, {
 			viewDescriptorService: descriptors, contextKeyService: contextKeys, compositeBarVisible: false,
@@ -130,14 +140,60 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this.bottomActivityBarHost = h(container.ownerDocument, 'div');
 		this.bottomActivityBarHost.className = 'ash-sessions-activity-host bottom';
 		this.bottomActivityBarHost.hidden = true;
-		this.contentDomNode.append(this.bottomActivityBarHost);
+		this.updateStatus = h(container.ownerDocument, 'div');
+		this.updateStatus.className = 'ash-sessions-update-status';
+		this.updateStatus.setAttribute('role', 'status');
+		this._register(contextKeys.createScoped(this.updateStatus)).createKey('sessionsActivityBarFocused', true);
+		const row = h(container.ownerDocument, 'div');
+		row.className = 'ash-sessions-update-row';
+		const spinner = h(container.ownerDocument, 'span');
+		spinner.className = 'ash-sessions-update-spinner';
+		spinner.setAttribute('aria-hidden', 'true');
+		const label = h(container.ownerDocument, 'span');
+		label.className = 'ash-sessions-update-label';
+		const message = localize('sessions.update.downloading', 'Downloading update...');
+		row.append(spinner, label);
+		this.updateStatus.append(row);
+		this._register(hoverService.setupDelayedHover(row, { content: message }));
+		const restartLabel = localize('sessions.update.restart', 'Restart to Update');
+		const restart = this._register(new Button(this.updateStatus, {
+			...defaultButtonStyles, label: restartLabel, icon: Lxicon.refresh, title: restartLabel,
+		}));
+		restart.domNode.classList.add('ash-sessions-update-restart');
+		const updateStatus = (): void => {
+			const state = updateService.state;
+			this.updateStatus.hidden = state === 'idle';
+			row.hidden = state !== 'downloading';
+			label.textContent = state === 'downloading' ? message : '';
+			restart.hidden = state !== 'ready' && state !== 'installing';
+			restart.enabled = state === 'ready';
+			restart.label = state === 'installing' ? localize('sessions.update.restarting', 'Restarting...') : restartLabel;
+		};
+		this._register(restart.onDidClick(async () => {
+			if (!restart.enabled || updateService.state !== 'ready') return;
+			const restoreFocus = restart.hasFocus();
+			restart.enabled = false;
+			try {
+				await updateService.installUpdate();
+			} catch {
+				if (!this.isDisposed) notifications.error(localize('update.installFailed', 'Could not install the update.'));
+			} finally {
+				if (!this.isDisposed) {
+					updateStatus();
+					if (restoreFocus && restart.enabled) restart.focus();
+				}
+			}
+		}));
+		this._register(updateService.onDidChangeState(updateStatus));
+		updateStatus();
+		this.contentDomNode.append(this.updateStatus, this.bottomActivityBarHost);
 	}
 	public override getPaneCompositeOptions(): ReturnType<WorkbenchSidebarPart['getPaneCompositeOptions']> {
 		return { paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true };
 	}
 	public override showComposite(id: string, focus = false): void {
 		super.showComposite(id, focus);
-		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.bottomActivityBarHost);
+		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.updateStatus);
 	}
 	override setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {
 		const integrated = location === ActivityBarPosition.DEFAULT;

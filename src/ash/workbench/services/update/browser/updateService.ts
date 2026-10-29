@@ -1,4 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Event } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult } from '../../../../platform/update/common/updateService.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../environment/browser/environmentService.js';
@@ -44,6 +45,8 @@ export function createWebUpdateProvider(document: Document): IUpdateProvider | u
 
 /** Uses the shared update contract without downloading a desktop package. */
 export class BrowserUpdateService extends Disposable implements IUpdateService {
+	readonly state = 'idle';
+	readonly onDidChangeState = Event.None;
 	private checking: Promise<UpdateCheckResult> | undefined;
 	private available: IUpdate | undefined;
 

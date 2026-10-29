@@ -8,6 +8,8 @@ import { Severity, INotificationService, type INotificationHandle } from '../../
 import { IUpdateService, type UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
 import { IMeteredConnectionService } from '../../../../platform/meteredConnection/common/meteredConnection.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
 
 const CHECK_FOR_UPDATES_COMMAND_ID = 'update.checkForUpdate';
 
@@ -28,7 +30,7 @@ class CheckForUpdatesAction extends Action2 {
 		try {
 			const result = await update.checkForUpdates();
 			if (result.status === 'available') {
-				showAvailableUpdate(notifications, update, result);
+				showAvailableUpdate(notifications, update, result, !services.get(IContextKeyService).getValue(IsSessionsWindowContext.key));
 			} else {
 				notifications.info(localize('update.current', 'Ash {0} is up to date.', result.version));
 			}
@@ -41,7 +43,7 @@ class CheckForUpdatesAction extends Action2 {
 	}
 }
 
-function showAvailableUpdate(notifications: INotificationService, update: IUpdateService, result: Extract<UpdateCheckResult, { status: 'available'; }>): void {
+function showAvailableUpdate(notifications: INotificationService, update: IUpdateService, result: Extract<UpdateCheckResult, { status: 'available'; }>, showUpdateNotifications: boolean): void {
 	let prompt: INotificationHandle;
 	prompt = notifications.notify({
 		severity: Severity.Info, message: localize('update.available', 'Ash {0} is available. You are using {1}.', result.version, result.currentVersion), actions: {
@@ -52,15 +54,15 @@ function showAvailableUpdate(notifications: INotificationService, update: IUpdat
 				label: localize('update.download', 'Download Update'),
 				run: async () => {
 					prompt.close();
-					const downloading = notifications.notify({ severity: Severity.Info, message: localize('update.downloading', 'Downloading and verifying Ash update...') });
+					const downloading = showUpdateNotifications ? notifications.notify({ severity: Severity.Info, message: localize('update.downloading', 'Downloading and verifying Ash update...') }) : undefined;
 					try {
 						const ready = await update.downloadUpdate();
-						showReadyUpdate(notifications, update, ready.version);
+						if (showUpdateNotifications) showReadyUpdate(notifications, update, ready.version);
 					} catch (error) {
 						console.error('Desktop update download failed', error);
 						notifications.error(localize('update.downloadFailed', 'Could not download the update.'));
 					} finally {
-						downloading.close();
+						downloading?.close();
 					}
 				},
 			}]
@@ -97,12 +99,13 @@ if (isWindows || isMacintosh) {
 		const update = accessor.get(IUpdateService);
 		const notifications = accessor.get(INotificationService);
 		const meteredConnection = accessor.get(IMeteredConnectionService);
+		const showUpdateNotifications = !accessor.get(IContextKeyService).getValue(IsSessionsWindowContext.key);
 		let disposed = false;
 		let started = false;
 		const check = async (): Promise<void> => {
 			try {
 				const result = await update.checkAutomatically();
-				if (!disposed && result?.status === 'available') showAvailableUpdate(notifications, update, result);
+				if (!disposed && result?.status === 'available') showAvailableUpdate(notifications, update, result, showUpdateNotifications);
 			} catch (error) {
 				console.error('Automatic Desktop update check failed', error);
 			}
